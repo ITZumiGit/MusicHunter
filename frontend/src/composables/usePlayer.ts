@@ -4,8 +4,10 @@
  */
 import { ref, computed, watch } from 'vue'
 import type { Track } from '../services/api'
-import { getStreamUrl, addToHistory, toggleLike, getLikes } from '../services/api'
+import { addToHistory, toggleLike, getLikes } from '../services/api'
 import { useDownloads } from './useDownloads'
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://musichunter.ru'
 
 export type RepeatMode = 'off' | 'all' | 'one'
 
@@ -79,7 +81,7 @@ export function usePlayer() {
     try {
       let url = track.url
       if (!url) {
-        url = await getStreamUrl(track.id)
+        url = `${API_URL}/stream/${encodeURIComponent(track.id)}`
         track.url = url
       }
       
@@ -108,20 +110,15 @@ export function usePlayer() {
     // 2. Локальные файлы бота (local_*) — прямой URL
     if (!url && track.id.startsWith('local_')) {
       const fileId = track.id.slice(6)
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://musichunter.ru'
-      url = `${apiUrl}/local/${fileId}`
+      url = `${API_URL}/local/${fileId}`
     }
     
-    // 3. Если нет локально — получаем стрим URL
+    // 3. Если нет локально — стрим через бэкенд (прокси)
     if (!url) {
       url = track.url
       if (!url) {
-        try {
-          url = await getStreamUrl(track.id)
-          track.url = url
-        } catch {
-          url = ''
-        }
+        url = `${API_URL}/stream/${encodeURIComponent(track.id)}`
+        track.url = url
       }
     }
     

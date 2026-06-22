@@ -60,24 +60,21 @@ export async function searchTracks(query: string, limit = 50): Promise<SearchRes
   }
 }
 
-// ─── Stream ──────────────────────────────────
-export async function getStreamUrl(trackId: string): Promise<string> {
+// ─── Stream (прокси через бэкенд) ────────────
+export function getStreamUrl(trackId: string): string {
   // Локальные файлы бота — прямой URL
   if (trackId.startsWith('local_')) {
     const fileId = trackId.slice(6)
     return `${API_URL}/local/${fileId}`
   }
-  const res = await fetch(`${API_URL}/stream/${encodeURIComponent(trackId)}`)
-  if (!res.ok) throw new Error('Не удалось получить ссылку на стрим')
-  const data = await res.json()
-  return data.url
+  return `${API_URL}/stream/${encodeURIComponent(trackId)}`
 }
 
 export function getAudioUrl(track: Track): string {
   if (track.url && track.url.startsWith('/local/')) {
     return `${API_URL}${track.url}`
   }
-  if (track.url) return track.url
+  if (track.url && track.url.startsWith('http')) return track.url
   return `${API_URL}/stream/${encodeURIComponent(track.id)}`
 }
 
@@ -220,9 +217,9 @@ export async function getStats(tgId: number): Promise<Stats> {
   return res.json()
 }
 
-// ─── Download (save to IndexedDB) ───────────
+// ─── Download (через бэкенд прокси) ────────
 export async function downloadTrackAudio(trackId: string): Promise<Blob> {
-  const url = await getStreamUrl(trackId)
+  const url = `${API_URL}/download/${encodeURIComponent(trackId)}`
   const res = await fetch(url)
   if (!res.ok) throw new Error('Ошибка скачивания')
   return res.blob()

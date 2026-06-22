@@ -187,9 +187,46 @@ async def search_tracks(q: str = Query(..., min_length=1), limit: int = Query(30
     )
 
 
-# ─── Stream URL ──────────────────────────────
+# ─── Stream (proxy audio through backend) ───
 @app.get("/stream/{track_id:path}")
 async def get_stream(track_id: str):
+    """Проксируем аудио через бэкенд — решает проблему IP-привязки и CORS"""
+    url = await music.get_stream_url(track_id)
+    if not url:
+        raise HTTPException(404, "Stream URL not found")
+    
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    raise HTTPException(502, f"Upstream returned {resp.status}")
+                
+                content_type = resp.headers.get("Content-Type", "audio/mpeg")
+                content_length = resp.headers.get("Content-Length")
+                
+                headers = {
+                    "Content-Type": content_type,
+                    "Accept-Ranges": "bytes",
+                    "Cache-Control": "public, max-age=3600",
+                }
+                if content_length:
+                    headers["Content-Length"] = content_length
+                
+                async def audio_generator():
+                    async for chunk in resp.content.iter_chunked(65536):
+                        yield chunk
+                
+                return StreamingResponse(audio_generator(), media_type=content_type, headers=headers)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Stream proxy error: {str(e)}")
+
+
+@app.get("/stream-url/{track_id:path}")
+async def get_stream_url(track_id: str):
+    """Вернуть прямой URL (для внутреннего использования)"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
@@ -202,8 +239,35 @@ async def download_track(track_id: str):
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
-    # Редирект на прямой URL (браузер скачает blob через fetch)
-    return {"url": url, "download": True}
+    
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    raise HTTPException(502, f"Upstream returned {resp.status}")
+                
+                content_type = resp.headers.get("Content-Type", "audio/mpeg")
+                content_length = resp.headers.get("Content-Length")
+                
+                headers = {
+                    "Content-Type": content_type,
+                    "Content-Disposition": f'attachment; filename="{track_id}.webm"',
+                    "Accept-Ranges": "bytes",
+                    "Cache-Control": "no-cache",
+                }
+                if content_length:
+                    headers["Content-Length"] = content_length
+                
+                async def audio_generator():
+                    async for chunk in resp.content.iter_chunked(65536):
+                        yield chunk
+                
+                return StreamingResponse(audio_generator(), media_type=content_type, headers=headers)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Download proxy error: {str(e)}")
 
 
 # ─── Local Music Files ───────────────────────

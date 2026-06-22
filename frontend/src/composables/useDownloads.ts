@@ -95,14 +95,10 @@ export function useDownloads() {
   async function downloadTrack(track: Track): Promise<void> {
     if (downloadedIds.value.has(track.id)) return
 
-    // 1. Получаем URL стрима
+    // 1. Получаем URL стрима (через бэкенд прокси)
     let streamUrl = track.url
-    if (!streamUrl) {
-      try {
-        streamUrl = await getStreamUrl(track.id)
-      } catch {
-        throw new Error('Не удалось получить ссылку на аудио')
-      }
+    if (!streamUrl || !streamUrl.startsWith('http')) {
+      streamUrl = getStreamUrl(track.id)
     }
     if (!streamUrl) throw new Error('Нет URL для скачивания')
 
