@@ -187,14 +187,47 @@ async def search_tracks(q: str = Query(..., min_length=1), limit: int = Query(30
     )
 
 
-# ─── Stream (302 redirect to audio URL) ─────
+# ─── Stream (proxy audio through backend) ───
 @app.get("/stream/{track_id:path}")
 async def get_stream(track_id: str):
-    """Редирект на прямой аудио URL — браузер сам скачает"""
+    """Проксируем аудио через бэкенд — пользователь не может напрямую на Google Video"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
-    return RedirectResponse(url=url, status_code=302)
+    
+    import httpx
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60.0, connect=10.0, read=30.0)) as client:
+            req = client.build_request("GET", url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "*/*",
+            })
+            resp = await client.send(req, stream=True)
+            if resp.status_code != 200:
+                await resp.aclose()
+                raise HTTPException(502, f"Upstream returned {resp.status_code}")
+            
+            content_type = resp.headers.get("content-type", "audio/webm")
+            
+            async def audio_generator():
+                try:
+                    async for chunk in resp.aiter_bytes(chunk_size=32768):
+                        yield chunk
+                finally:
+                    await resp.aclose()
+            
+            return StreamingResponse(
+                audio_generator(),
+                media_type=content_type,
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                    "Accept-Ranges": "none",
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Stream proxy error: {str(e)}")
 
 
 @app.get("/stream-url/{track_id:path}")
@@ -208,30 +241,67 @@ async def get_stream_url_endpoint(track_id: str):
 
 @app.get("/download/{track_id:path}")
 async def download_track(track_id: str):
-    """Редирект на аудио URL для скачивания"""
+    """Проксируем аудио для скачивания"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
-    return RedirectResponse(url=url, status_code=302)
+    
+    import httpx
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(120.0, connect=10.0, read=60.0)) as client:
+            req = client.build_request("GET", url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "*/*",
+            })
+            resp = await client.send(req, stream=True)
+            if resp.status_code != 200:
+                await resp.aclose()
+                raise HTTPException(502, f"Upstream returned {resp.status_code}")
+            
+            content_type = resp.headers.get("content-type", "audio/webm")
+            
+            async def audio_generator():
+                try:
+                    async for chunk in resp.aiter_bytes(chunk_size=32768):
+                        yield chunk
+                finally:
+                    await resp.aclose()
+            
+            return StreamingResponse(
+                audio_generator(),
+                media_type=content_type,
+                headers={
+                    "Content-Disposition": f'attachment; filename="{track_id}.webm"',
+                    "Cache-Control": "no-cache",
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Download proxy error: {str(e)}")
 
 
-# ─── Cover proxy (fix i.ytimg.com blocked in RU) ──
+# ─── Cover proxy (i.ytimg.com заблокирован в РФ) ──
 @app.get("/cover")
 async def proxy_cover(url: str = Query(..., max_length=500)):
-    """Прокси обложек — i.ytimg.com может быть заблокирован"""
-    import aiohttp
+    """Прокси обложек через бэкенд"""
+    import httpx
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status != 200:
-                    raise HTTPException(502, f"Upstream {resp.status}")
-                content_type = resp.headers.get("Content-Type", "image/jpeg")
-                body = await resp.read()
-                return StreamingResponse(
-                    iter([body]),
-                    media_type=content_type,
-                    headers={"Cache-Control": "public, max-age=86400", "Content-Length": str(len(body))},
-                )
+        async with httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(15.0)) as client:
+            resp = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            })
+            if resp.status_code != 200:
+                raise HTTPException(502, f"Upstream {resp.status_code}")
+            content_type = resp.headers.get("content-type", "image/jpeg")
+            return StreamingResponse(
+                iter([resp.content]),
+                media_type=content_type,
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "Content-Length": str(len(resp.content)),
+                },
+            )
     except HTTPException:
         raise
     except Exception as e:
