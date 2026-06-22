@@ -187,44 +187,19 @@ async def search_tracks(q: str = Query(..., min_length=1), limit: int = Query(30
     )
 
 
-# ─── Stream (proxy audio through backend) ───
+# ─── Stream (302 redirect to audio URL) ─────
 @app.get("/stream/{track_id:path}")
 async def get_stream(track_id: str):
-    """Проксируем аудио через бэкенд — решает проблему IP-привязки и CORS"""
+    """Редирект на прямой аудио URL — браузер сам скачает"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
-    
-    import aiohttp
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=60, sock_read=30)) as resp:
-                if resp.status != 200:
-                    raise HTTPException(502, f"Upstream returned {resp.status}")
-                
-                content_type = resp.headers.get("Content-Type", "audio/webm")
-                
-                headers = {
-                    "Content-Type": content_type,
-                    "Cache-Control": "public, max-age=3600",
-                    "Transfer-Encoding": "chunked",
-                }
-                # Не передаём Content-Length — стримим чанками, избегаем mismatch
-                
-                async def audio_generator():
-                    async for chunk in resp.content.iter_chunked(32768):
-                        yield chunk
-                
-                return StreamingResponse(audio_generator(), media_type=content_type, headers=headers)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(502, f"Stream proxy error: {str(e)}")
+    return RedirectResponse(url=url, status_code=302)
 
 
 @app.get("/stream-url/{track_id:path}")
 async def get_stream_url_endpoint(track_id: str):
-    """Вернуть прямой URL (для внутреннего использования)"""
+    """Вернуть прямой URL (для отладки)"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
@@ -233,35 +208,34 @@ async def get_stream_url_endpoint(track_id: str):
 
 @app.get("/download/{track_id:path}")
 async def download_track(track_id: str):
-    """Проксируем аудио для скачивания — возвращаем стрим с CORS заголовками"""
+    """Редирект на аудио URL для скачивания"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
-    
+    return RedirectResponse(url=url, status_code=302)
+
+
+# ─── Cover proxy (fix i.ytimg.com blocked in RU) ──
+@app.get("/cover")
+async def proxy_cover(url: str = Query(..., max_length=500)):
+    """Прокси обложек — i.ytimg.com может быть заблокирован"""
     import aiohttp
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=120, sock_read=60)) as resp:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
-                    raise HTTPException(502, f"Upstream returned {resp.status}")
-                
-                content_type = resp.headers.get("Content-Type", "audio/webm")
-                
-                headers = {
-                    "Content-Type": content_type,
-                    "Content-Disposition": f'attachment; filename="{track_id}.webm"',
-                    "Cache-Control": "no-cache",
-                }
-                
-                async def audio_generator():
-                    async for chunk in resp.content.iter_chunked(32768):
-                        yield chunk
-                
-                return StreamingResponse(audio_generator(), media_type=content_type, headers=headers)
+                    raise HTTPException(502, f"Upstream {resp.status}")
+                content_type = resp.headers.get("Content-Type", "image/jpeg")
+                body = await resp.read()
+                return StreamingResponse(
+                    iter([body]),
+                    media_type=content_type,
+                    headers={"Cache-Control": "public, max-age=86400", "Content-Length": str(len(body))},
+                )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(502, f"Download proxy error: {str(e)}")
+        raise HTTPException(502, f"Cover proxy error: {str(e)}")
 
 
 # ─── Local Music Files ───────────────────────

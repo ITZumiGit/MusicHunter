@@ -52,6 +52,8 @@ export async function searchTracks(query: string, limit = 50): Promise<SearchRes
     console.log('[MusicHunter] Response status:', res.status, res.ok)
     if (!res.ok) throw new Error(`Сервер вернул ${res.status}`)
     const data = await res.json()
+    // Проксируем обложки через бэкенд
+    data.tracks = data.tracks.map((t: Track) => ({ ...t, cover_url: getCoverUrl(t.cover_url) }))
     console.log('[MusicHunter] Got', data.count, 'tracks')
     return data
   } catch (e: any) {
@@ -60,13 +62,14 @@ export async function searchTracks(query: string, limit = 50): Promise<SearchRes
   }
 }
 
-// ─── Stream (прокси через бэкенд) ────────────
-export function getStreamUrl(trackId: string): string {
+// ─── Stream (302 redirect from backend) ─────
+export async function getStreamUrl(trackId: string): Promise<string> {
   // Локальные файлы бота — прямой URL
   if (trackId.startsWith('local_')) {
     const fileId = trackId.slice(6)
     return `${API_URL}/local/${fileId}`
   }
+  // Для аудио-элемента可以直接用 /stream/ URL — браузер сам пойдёт по редиректу
   return `${API_URL}/stream/${encodeURIComponent(trackId)}`
 }
 
@@ -74,8 +77,16 @@ export function getAudioUrl(track: Track): string {
   if (track.url && track.url.startsWith('/local/')) {
     return `${API_URL}${track.url}`
   }
-  if (track.url && track.url.startsWith('http')) return track.url
   return `${API_URL}/stream/${encodeURIComponent(track.id)}`
+}
+
+// Обложки через прокси (i.ytimg.com заблокирован в РФ)
+export function getCoverUrl(coverUrl: string): string {
+  if (!coverUrl) return ''
+  if (coverUrl.includes('ytimg.com') || coverUrl.includes('ggpht.com')) {
+    return `${API_URL}/cover?url=${encodeURIComponent(coverUrl)}`
+  }
+  return coverUrl
 }
 
 // ─── Likes ───────────────────────────────────
@@ -99,7 +110,9 @@ export async function toggleLike(tgId: number, track: Track): Promise<{ action: 
 export async function getLikes(tgId: number): Promise<{ count: number; tracks: Track[] }> {
   const res = await fetch(`${API_URL}/likes/${tgId}`)
   if (!res.ok) throw new Error('Ошибка загрузки лайков')
-  return res.json()
+  const data = await res.json()
+  if (data.tracks) data.tracks = data.tracks.map((t: Track) => ({ ...t, cover_url: getCoverUrl(t.cover_url) }))
+  return data
 }
 
 export async function removeLike(tgId: number, trackId: string): Promise<void> {
@@ -203,7 +216,9 @@ export async function getHistory(
 ): Promise<{ count: number; tracks: Track[] }> {
   const res = await fetch(`${API_URL}/history/${tgId}?limit=${limit}`)
   if (!res.ok) throw new Error('Ошибка загрузки истории')
-  return res.json()
+  const data = await res.json()
+  if (data.tracks) data.tracks = data.tracks.map((t: Track) => ({ ...t, cover_url: getCoverUrl(t.cover_url) }))
+  return data
 }
 
 export async function clearHistory(tgId: number): Promise<void> {
