@@ -15,7 +15,7 @@
     <!-- Error -->
     <div v-else-if="errorMsg" class="state-container error-state">
       <div class="error-icon">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -44,7 +44,7 @@
     <!-- Empty state -->
     <div v-else-if="searched" class="state-container">
       <div class="empty-icon">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="11" cy="11" r="8"/>
           <path d="M21 21l-4.35-4.35"/>
           <line x1="8" y1="11" x2="14" y2="11"/>
@@ -55,16 +55,15 @@
     </div>
     
     <!-- Welcome state -->
-    <div v-else class="state-container welcome">
-      <div class="welcome-icon">
-        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-          <path d="M9 18V5l12-2v13"/>
-          <circle cx="6" cy="18" r="3"/>
-          <circle cx="18" cy="16" r="3"/>
+    <div v-else class="welcome">
+      <div class="welcome-visual">
+        <div class="welcome-orb"></div>
+        <svg class="welcome-note" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
         </svg>
       </div>
       <h2>MusicHunter</h2>
-      <p>Найдите любой трек в поиске</p>
+      <p>Найдите любой трек</p>
     </div>
   </div>
 </template>
@@ -86,18 +85,14 @@ const lastQuery = ref('')
 
 async function handleSearch(query: string) {
   if (!query.trim()) return
-  
   lastQuery.value = query
   loading.value = true
   searched.value = true
   errorMsg.value = ''
-  
   try {
     const data = await searchTracks(query)
-    console.log('[MusicHunter] Search results:', data.count)
     results.value = data.tracks
   } catch (e: any) {
-    console.error('[MusicHunter] Search error:', e)
     errorMsg.value = e?.message || 'Не удалось выполнить поиск'
     results.value = []
   } finally {
@@ -106,9 +101,7 @@ async function handleSearch(query: string) {
 }
 
 function retryLastSearch() {
-  if (lastQuery.value) {
-    handleSearch(lastQuery.value)
-  }
+  if (lastQuery.value) handleSearch(lastQuery.value)
 }
 
 function onPlayTrack(track: Track, index: number) {
@@ -127,12 +120,13 @@ function onPlayTrack(track: Track, index: number) {
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 800;
   color: var(--fg-primary);
   margin-bottom: var(--space-lg);
 }
 
+/* ─── States ─── */
 .state-container {
   display: flex;
   flex-direction: column;
@@ -145,7 +139,7 @@ function onPlayTrack(track: Track, index: number) {
 
 .state-container h3 {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--fg-primary);
   margin-bottom: var(--space-sm);
 }
@@ -155,12 +149,8 @@ function onPlayTrack(track: Track, index: number) {
   color: var(--fg-secondary);
 }
 
-.error-state {
-  padding-top: 20%;
-}
-
 .error-icon {
-  color: var(--pink, #fd79a8);
+  color: var(--pink);
   margin-bottom: var(--space-lg);
 }
 
@@ -173,22 +163,22 @@ function onPlayTrack(track: Track, index: number) {
 }
 
 .retry-btn {
-  padding: 8px 24px;
+  padding: 10px 28px;
   border-radius: var(--radius-full);
-  background: var(--accent);
+  background: var(--accent-gradient);
   color: white;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   transition: all var(--transition);
+  border: none;
+  cursor: pointer;
 }
 
-.retry-btn:hover {
-  background: var(--accent-hover);
-}
+.retry-btn:active { transform: scale(0.95); }
 
 .spinner {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
@@ -201,27 +191,63 @@ function onPlayTrack(track: Track, index: number) {
   margin-bottom: var(--space-lg);
 }
 
+/* ─── Welcome ─── */
 .welcome {
-  padding-top: 15%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 18vh;
+  text-align: center;
 }
 
-.welcome-icon {
+.welcome-visual {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-2xl);
+}
+
+.welcome-orb {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  opacity: 0.12;
+  animation: orb-pulse 3s ease-in-out infinite;
+}
+
+.welcome-note {
+  position: relative;
+  z-index: 1;
   color: var(--accent);
-  opacity: 0.5;
-  margin-bottom: var(--space-xl);
-  animation: pulse 2s ease-in-out infinite;
 }
 
 .welcome h2 {
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--fg-primary);
   margin-bottom: var(--space-sm);
 }
 
-.results-container {
-  margin-top: var(--space-md);
+.welcome p {
+  font-size: 15px;
+  color: var(--fg-muted);
 }
+
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.12; }
+  50% { transform: scale(1.15); opacity: 0.2; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Results ─── */
+.results-container { margin-top: var(--space-md); }
 
 .results-header {
   display: flex;
@@ -231,11 +257,12 @@ function onPlayTrack(track: Track, index: number) {
 }
 
 .results-count {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--fg-muted);
+  font-weight: 600;
 }
 
-/* Mobile adjustments */
+/* Mobile */
 @media (max-width: 767px) {
   .search-view {
     padding: var(--space-lg);

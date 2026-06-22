@@ -11,7 +11,7 @@
     <!-- Mobile: Bottom navigation -->
     <MobileNav class="app-mobile-nav" />
     
-    <!-- Mobile: Player (expands from bottom) -->
+    <!-- Mobile: Player (sits above nav) -->
     <Player
       v-if="hasPlayer"
       :current-track="player.currentTrack.value"
@@ -73,20 +73,16 @@ import { useTelegram } from './composables/useTelegram'
 const player = usePlayer()
 const tg = useTelegram()
 
-// Provide player globally
 provide('player', player)
 
 const hasPlayer = computed(() => !!player.currentTrack.value)
 
-// Initialize
 onMounted(async () => {
-  // Get user ID from Telegram or use test ID
   const tgUser = tg.user.value
   if (tgUser?.id) {
     player.tgUserId.value = tgUser.id
     await player.loadLikes(tgUser.id)
   } else {
-    // Dev mode
     player.tgUserId.value = 12345
     await player.loadLikes(12345)
   }
@@ -94,11 +90,17 @@ onMounted(async () => {
 </script>
 
 <style>
+/* Global resets */
+* { box-sizing: border-box; }
+body { margin: 0; overflow: hidden; }
+
 /* App layout */
 .app {
   display: flex;
   min-height: 100vh;
+  height: 100vh;
   background: var(--bg-primary);
+  overflow: hidden;
 }
 
 /* ─── Desktop layout ─── */
@@ -110,7 +112,7 @@ onMounted(async () => {
   }
   
   .app-sidebar {
-    display: flex !important; /* Force show on desktop */
+    display: flex !important;
     grid-column: 1;
     grid-row: 1;
   }
@@ -122,9 +124,7 @@ onMounted(async () => {
     min-height: 100vh;
   }
   
-  .app-mobile-nav {
-    display: none !important; /* Force hide on desktop */
-  }
+  .app-mobile-nav { display: none !important; }
   
   .app.has-player .app-content {
     padding-bottom: var(--player-height);
@@ -137,18 +137,21 @@ onMounted(async () => {
     flex-direction: column;
   }
   
-  .app-sidebar {
-    display: none !important; /* Force hide on mobile */
-  }
+  .app-sidebar { display: none !important; }
   
   .app-content {
     flex: 1;
     overflow-y: auto;
-    padding-bottom: calc(var(--nav-height) + var(--player-height-mobile, 64px));
+    -webkit-overflow-scrolling: touch;
+    /* Base padding for nav */
+    padding-bottom: var(--nav-height);
   }
   
-  .app-mobile-nav {
-    display: flex !important; /* Force show on mobile */
+  /* When player is visible, add extra padding for mini player above nav */
+  .app.has-player .app-content {
+    padding-bottom: calc(var(--nav-height) + var(--player-height-mobile));
   }
+  
+  .app-mobile-nav { display: flex !important; }
 }
 </style>

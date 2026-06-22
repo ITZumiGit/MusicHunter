@@ -7,7 +7,9 @@
       class="nav-item"
       :class="{ active: $route.path === item.path }"
     >
-      <component :is="item.icon" />
+      <div class="nav-icon-wrap">
+        <component :is="item.icon" />
+      </div>
       <span>{{ item.label }}</span>
     </router-link>
   </nav>
@@ -21,7 +23,6 @@ const $route = useRoute()
 const $router = useRouter()
 const navRef = ref<HTMLElement | null>(null)
 
-// SVG icon components
 const SearchIcon = () => h('svg', { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
   h('circle', { cx: 11, cy: 11, r: 8 }),
   h('path', { d: 'M21 21l-4.35-4.35' })
@@ -59,7 +60,6 @@ const navItems = [
   { path: '/history', label: 'История', icon: HistoryIcon },
 ]
 
-// ── Swipe navigation ──
 let touchStartX = 0
 let touchStartY = 0
 
@@ -71,24 +71,14 @@ function onTouchStart(e: TouchEvent) {
 function onTouchEnd(e: TouchEvent) {
   const dx = e.changedTouches[0].clientX - touchStartX
   const dy = e.changedTouches[0].clientY - touchStartY
-  
-  // Only horizontal swipes (dx > 2*dy), minimum 60px
   if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.5) return
-
   const currentIndex = navItems.findIndex(item => item.path === $route.path)
   if (currentIndex === -1) return
-
-  if (dx > 0 && currentIndex > 0) {
-    // Swipe right → previous tab
-    $router.push(navItems[currentIndex - 1].path)
-  } else if (dx < 0 && currentIndex < navItems.length - 1) {
-    // Swipe left → next tab
-    $router.push(navItems[currentIndex + 1].path)
-  }
+  if (dx > 0 && currentIndex > 0) $router.push(navItems[currentIndex - 1].path)
+  else if (dx < 0 && currentIndex < navItems.length - 1) $router.push(navItems[currentIndex + 1].path)
 }
 
 onMounted(() => {
-  // Swipe на всём экране, не только на навбаре
   document.addEventListener('touchstart', onTouchStart, { passive: true })
   document.addEventListener('touchend', onTouchEnd, { passive: true })
 })
@@ -105,32 +95,54 @@ onUnmounted(() => {
   justify-content: space-around;
   align-items: center;
   height: var(--nav-height);
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
+  background: var(--bg-glass);
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  border-top: 1px solid var(--border-glass);
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 90;
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: var(--space-xs) var(--space-sm);
+  gap: 3px;
+  padding: 6px 8px;
   color: var(--fg-muted);
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   transition: all var(--transition);
   min-width: 0;
   flex: 1;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nav-item:hover,
+.nav-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  transition: all var(--transition-spring);
+}
+
+.nav-item:hover {
+  color: var(--fg-secondary);
+}
+
 .nav-item.active {
   color: var(--accent);
+}
+
+.nav-item.active .nav-icon-wrap {
+  background: var(--accent-glow);
 }
 
 .nav-item.active svg {

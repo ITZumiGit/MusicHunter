@@ -3,45 +3,34 @@
     <div class="header-row">
       <h1 class="page-title">Плейлисты</h1>
       <button class="btn-create" @click="showCreateModal = true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
         Создать
       </button>
     </div>
     
     <!-- Create modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal">
-        <h3>Новый плейлист</h3>
-        <input
-          v-model="newPlaylistName"
-          type="text"
-          placeholder="Название плейлиста"
-          class="input"
-          @keydown.enter="createPlaylist"
-        />
-        <textarea
-          v-model="newPlaylistDesc"
-          placeholder="Описание (необязательно)"
-          class="input textarea"
-        ></textarea>
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="showCreateModal = false">Отмена</button>
-          <button class="btn-primary" @click="createPlaylist" :disabled="!newPlaylistName.trim()">
-            Создать
-          </button>
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
+          <div class="modal">
+            <h3>Новый плейлист</h3>
+            <input v-model="newPlaylistName" type="text" placeholder="Название" class="input" @keydown.enter="createPlaylist" />
+            <textarea v-model="newPlaylistDesc" placeholder="Описание (необязательно)" class="input textarea"></textarea>
+            <div class="modal-actions">
+              <button class="btn-secondary" @click="showCreateModal = false">Отмена</button>
+              <button class="btn-primary" @click="createPlaylist" :disabled="!newPlaylistName.trim()">Создать</button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </Transition>
+    </Teleport>
     
     <!-- Playlist detail -->
     <div v-if="activePlaylist" class="playlist-detail">
       <button class="btn-back" @click="activePlaylist = null">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
         Назад
       </button>
       <h2 class="playlist-title">{{ activePlaylist.name }}</h2>
@@ -57,37 +46,23 @@
           @like="player.toggleTrackLike"
         />
       </div>
-      <div v-else class="empty-playlist">
-        <p>В плейлисте пока нет треков</p>
-      </div>
+      <div v-else class="empty-playlist">Пока нет треков</div>
     </div>
     
     <!-- Playlists list -->
     <template v-else>
-      <!-- Loading -->
       <div v-if="loading" class="state-container">
         <div class="spinner"></div>
         <p>Загрузка...</p>
       </div>
       
-      <!-- Playlists -->
       <div v-else-if="playlists.length" class="playlists-grid">
-        <div
-          v-for="pl in playlists"
-          :key="pl.id"
-          class="playlist-card"
-          @click="openPlaylist(pl.id)"
-        >
+        <div v-for="pl in playlists" :key="pl.id" class="playlist-card" @click="openPlaylist(pl.id)">
           <div class="playlist-cover">
             <img v-if="pl.cover_url" :src="pl.cover_url" :alt="pl.name" />
             <div v-else class="cover-placeholder">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <line x1="8" y1="6" x2="21" y2="6"/>
-                <line x1="8" y1="12" x2="21" y2="12"/>
-                <line x1="8" y1="18" x2="21" y2="18"/>
-                <line x1="3" y1="6" x2="3.01" y2="6"/>
-                <line x1="3" y1="12" x2="3.01" y2="12"/>
-                <line x1="3" y1="18" x2="3.01" y2="18"/>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
               </svg>
             </div>
           </div>
@@ -98,20 +73,14 @@
         </div>
       </div>
       
-      <!-- Empty -->
       <div v-else class="state-container">
-        <div class="empty-icon">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <line x1="8" y1="6" x2="21" y2="6"/>
-            <line x1="8" y1="12" x2="21" y2="12"/>
-            <line x1="8" y1="18" x2="21" y2="18"/>
-            <line x1="3" y1="6" x2="3.01" y2="6"/>
-            <line x1="3" y1="12" x2="3.01" y2="12"/>
-            <line x1="3" y1="18" x2="3.01" y2="18"/>
+        <div class="empty-icon-wrap">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
           </svg>
         </div>
         <h3>Нет плейлистов</h3>
-        <p>Создайте свой первый плейлист</p>
+        <p>Создайте свой первый</p>
       </div>
     </template>
   </div>
@@ -124,7 +93,6 @@ import TrackList from '../components/TrackList.vue'
 import { getPlaylists, getPlaylist, createPlaylist as apiCreate, type Playlist, type PlaylistDetail, type Track } from '../services/api'
 
 const player = inject<any>('player')
-
 const loading = ref(true)
 const playlists = ref<Playlist[]>([])
 const activePlaylist = ref<PlaylistDetail | null>(null)
@@ -137,44 +105,31 @@ async function loadPlaylists() {
   try {
     const data = await getPlaylists(player.tgUserId.value)
     playlists.value = data.playlists
-  } catch {
-    playlists.value = []
-  } finally {
-    loading.value = false
-  }
+  } catch { playlists.value = [] }
+  finally { loading.value = false }
 }
 
 async function openPlaylist(id: number) {
-  try {
-    activePlaylist.value = await getPlaylist(player.tgUserId.value, id)
-  } catch {
-    activePlaylist.value = null
-  }
+  try { activePlaylist.value = await getPlaylist(player.tgUserId.value, id) }
+  catch { activePlaylist.value = null }
 }
 
 async function createPlaylist() {
   if (!newPlaylistName.value.trim()) return
-  
   try {
     await apiCreate(player.tgUserId.value, newPlaylistName.value, newPlaylistDesc.value)
     newPlaylistName.value = ''
     newPlaylistDesc.value = ''
     showCreateModal.value = false
     await loadPlaylists()
-  } catch {
-    // Error handling
-  }
+  } catch { /* error */ }
 }
 
 function onPlayTrack(track: Track, index: number) {
-  if (activePlaylist.value) {
-    player.setQueue(activePlaylist.value.tracks, index)
-  }
+  if (activePlaylist.value) player.setQueue(activePlaylist.value.tracks, index)
 }
 
-onMounted(() => {
-  loadPlaylists()
-})
+onMounted(() => loadPlaylists())
 </script>
 
 <style scoped>
@@ -191,53 +146,40 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 800;
   color: var(--fg-primary);
 }
 
 .btn-create {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-lg);
-  background: var(--accent);
+  gap: 6px;
+  padding: 8px 18px;
+  background: var(--accent-gradient);
   color: white;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 700;
   transition: all var(--transition);
+  box-shadow: 0 2px 12px rgba(139, 92, 246, 0.3);
 }
 
-.btn-create:hover {
-  background: var(--accent-hover);
-}
+.btn-create:active { transform: scale(0.95); }
 
 .state-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: var(--space-xl) * 2;
+  padding-top: 20vh;
   text-align: center;
-  color: var(--fg-secondary);
 }
 
-.state-container h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--fg-primary);
-  margin-bottom: var(--space-sm);
-}
-
-.state-container p {
-  font-size: 14px;
-  color: var(--fg-secondary);
-}
+.state-container h3 { font-size: 18px; font-weight: 700; color: var(--fg-primary); margin-bottom: var(--space-sm); }
+.state-container p { font-size: 14px; color: var(--fg-muted); }
 
 .spinner {
-  width: 40px;
-  height: 40px;
+  width: 36px; height: 36px;
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
@@ -245,217 +187,131 @@ onMounted(() => {
   margin-bottom: var(--space-lg);
 }
 
-.empty-icon {
-  color: var(--teal);
-  opacity: 0.5;
+.empty-icon-wrap {
+  display: flex; align-items: center; justify-content: center;
+  width: 80px; height: 80px; border-radius: var(--radius-xl);
+  background: var(--accent-gradient-subtle);
+  color: var(--accent);
   margin-bottom: var(--space-lg);
 }
 
-/* Playlists grid */
+/* Grid */
 .playlists-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--space-lg);
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-md);
 }
 
 .playlist-card {
-  background: var(--bg-secondary);
-  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all var(--transition-slow);
+  backdrop-filter: blur(8px);
 }
 
 .playlist-card:hover {
-  background: var(--bg-tertiary);
+  border-color: var(--border-light);
   transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
+
+.playlist-card:active { transform: scale(0.97); }
 
 .playlist-cover {
   aspect-ratio: 1;
   background: var(--bg-tertiary);
 }
 
-.playlist-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+.playlist-cover img { width: 100%; height: 100%; object-fit: cover; }
 
 .cover-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-tertiary);
-  color: var(--fg-muted);
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-gradient-subtle);
+  color: var(--accent);
 }
 
-.playlist-info {
-  padding: var(--space-md);
-}
+.playlist-info { padding: var(--space-md); }
 
 .playlist-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fg-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 13px; font-weight: 600; color: var(--fg-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.playlist-meta {
-  font-size: 12px;
-  color: var(--fg-muted);
-  margin-top: 2px;
-}
+.playlist-meta { font-size: 11px; color: var(--fg-muted); margin-top: 3px; }
 
-/* Playlist detail */
-.playlist-detail {
-  margin-top: var(--space-md);
-}
+/* Detail */
+.playlist-detail { margin-top: var(--space-md); }
 
 .btn-back {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) 0;
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: var(--space-lg);
-  transition: opacity var(--transition);
+  display: flex; align-items: center; gap: 6px;
+  padding: var(--space-sm) 0; color: var(--accent);
+  font-size: 14px; font-weight: 600; margin-bottom: var(--space-lg);
 }
 
-.btn-back:hover {
-  opacity: 0.8;
-}
-
-.playlist-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--fg-primary);
-  margin-bottom: var(--space-sm);
-}
-
-.playlist-desc {
-  font-size: 14px;
-  color: var(--fg-secondary);
-  margin-bottom: var(--space-xl);
-}
-
-.tracks-container {
-  margin-top: var(--space-md);
-}
-
-.empty-playlist {
-  text-align: center;
-  padding: var(--space-xl);
-  color: var(--fg-muted);
-}
+.playlist-title { font-size: 22px; font-weight: 800; color: var(--fg-primary); margin-bottom: var(--space-sm); }
+.playlist-desc { font-size: 14px; color: var(--fg-secondary); margin-bottom: var(--space-xl); }
+.tracks-container { margin-top: var(--space-md); }
+.empty-playlist { text-align: center; padding: var(--space-xl); color: var(--fg-muted); font-size: 14px; }
 
 /* Modal */
 .modal-overlay {
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  padding: var(--space-lg);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200; padding: var(--space-lg);
 }
 
 .modal {
   background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
   padding: var(--space-xl);
-  width: 100%;
-  max-width: 400px;
+  width: 100%; max-width: 380px;
+  box-shadow: var(--shadow-lg);
 }
 
-.modal h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--fg-primary);
-  margin-bottom: var(--space-lg);
-}
+.modal h3 { font-size: 18px; font-weight: 700; color: var(--fg-primary); margin-bottom: var(--space-lg); }
 
 .input {
-  width: 100%;
-  padding: var(--space-md);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 14px;
-  color: var(--fg-primary);
-  margin-bottom: var(--space-md);
+  width: 100%; padding: 12px 14px;
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 14px; color: var(--fg-primary);
+  margin-bottom: var(--space-md); outline: none; transition: border-color 0.2s;
 }
 
-.input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.input::placeholder { color: var(--fg-muted); }
+.textarea { min-height: 80px; resize: vertical; }
 
-.input::placeholder {
-  color: var(--fg-muted);
-}
-
-.textarea {
-  min-height: 80px;
-  resize: vertical;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-md);
-  margin-top: var(--space-lg);
-}
+.modal-actions { display: flex; justify-content: flex-end; gap: var(--space-md); margin-top: var(--space-lg); }
 
 .btn-secondary {
-  padding: var(--space-sm) var(--space-lg);
-  background: var(--bg-tertiary);
-  color: var(--fg-primary);
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all var(--transition);
-}
-
-.btn-secondary:hover {
-  background: var(--border);
+  padding: 8px 18px; background: var(--bg-tertiary); color: var(--fg-primary);
+  border-radius: var(--radius); font-size: 14px; font-weight: 500; transition: all var(--transition);
 }
 
 .btn-primary {
-  padding: var(--space-sm) var(--space-lg);
-  background: var(--accent);
-  color: white;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
-  transition: all var(--transition);
+  padding: 8px 18px; background: var(--accent-gradient); color: white;
+  border-radius: var(--radius); font-size: 14px; font-weight: 600; transition: all var(--transition);
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* Mobile */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
 @media (max-width: 767px) {
   .playlists-view {
     padding: var(--space-lg);
     padding-bottom: calc(var(--nav-height) + var(--player-height-mobile) + var(--space-xl));
   }
-  
-  .playlists-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .playlists-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
