@@ -571,19 +571,16 @@ class AudiusSource:
 
 class StreamResolver:
     """
-    Разрешение стрим URL из нескольких источников:
-    1. Piped API
-    2. Invidious API
-    3. Cobalt API
+    Разрешение стрим URL:
+    1. yt-dlp (прямой вызов, самый надёжный)
+    2. Piped API (фоллбэк)
+    3. Invidious API (фоллбэк)
     """
 
     PIPED_INSTANCES = [
         "https://pipedapi.kavin.rocks",
         "https://pipedapi.adminforge.de",
-        "https://api.piped.projectsegfau.lt",
-        "https://pipedapi.moomoo.me",
         "https://pipedapi.r4fo.com",
-        "https://pipedapi-libre.kavin.rocks",
     ]
 
     INVIDIOUS_INSTANCES = [
@@ -591,14 +588,11 @@ class StreamResolver:
         "https://invidious.nerdvpn.de",
         "https://inv.thepixora.com",
         "https://invidious.tiekoetter.com",
-        "https://invidious.fdn.fr",
-        "https://yt.cdaut.de",
     ]
-
-    COBALT_URL = "https://api.cobalt.tools"
 
     def __init__(self):
         self._session: Optional[aiohttp.ClientSession] = None
+        self._yt_dlp_available: Optional[bool] = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -612,23 +606,73 @@ class StreamResolver:
             )
         return self._session
 
-    async def resolve_youtube(self, video_id: str) -> Optional[str]:
-        """Получить аудио URL для YouTube видео — цепочка фоллбэков"""
+    async def _check_yt_dlp(self) -> bool:
+        """Проверить доступность yt-dlp"""
+        if self._yt_dlp_available is not None:
+            return self._yt_dlp_available
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "yt-dlp", "--version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(proc.wait(), timeout=5)
+            self._yt_dlp_available = proc.returncode == 0
+            if self._yt_dlp_available:
+                logger.info("[StreamResolver] yt-dlp available")
+        except Exception:
+            self._yt_dlp_available = False
+            logger.warning("[StreamResolver] yt-dlp not found")
+        return self._yt_dlp_available
 
-        # 1. Piped
+    async def resolve_youtube(self, video_id: str) -> Optional[str]:
+        """Получить аудио URL для YouTube видео"""
+
+        # 1. yt-dlp (самый надёжный)
+        if await self._check_yt_dlp():
+            url = await self._ytdlp_stream(video_id)
+            if url:
+                return url
+
+        # 2. Piped
         url = await self._piped_stream(video_id)
         if url:
             return url
 
-        # 2. Invidious
+        # 3. Invidious
         url = await self._invidious_stream(video_id)
         if url:
             return url
 
-        # 3. Cobalt
-        url = await self._cobalt_stream(video_id)
-        if url:
-            return url
+        return None
+
+    async def _ytdlp_stream(self, video_id: str) -> Optional[str]:
+        """Получить прямой аудио URL через yt-dlp"""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "yt-dlp",
+                "-f", "bestaudio[ext=webm]/bestaudio/best",
+                "--get-url",
+                "--no-warnings",
+                "--no-check-certificates",
+                f"https://www.youtube.com/watch?v={video_id}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+
+            if proc.returncode == 0 and stdout:
+                url = stdout.decode().strip()
+                if url and url.startswith("http"):
+                    logger.info(f"[yt-dlp] Got stream URL for {video_id}")
+                    return url
+
+            err = stderr.decode().strip() if stderr else ""
+            logger.debug(f"[yt-dlp] Failed for {video_id}: {err[:200]}")
+        except asyncio.TimeoutError:
+            logger.warning(f"[yt-dlp] Timeout for {video_id}")
+        except Exception as e:
+            logger.warning(f"[yt-dlp] Error: {e}")
 
         return None
 
@@ -647,35 +691,27 @@ class StreamResolver:
                     if not audio_streams:
                         continue
 
-                    # Ищем лучший аудио стрим
                     best = None
                     best_bitrate = 0
                     for stream in audio_streams:
                         codec = stream.get("codec", "").lower()
                         bitrate = int(stream.get("bitrate", 0) or 0)
                         stream_url = stream.get("url", "")
-
                         if not stream_url:
                             continue
-
-                        # Prefer opus > aac
                         if "opus" in codec:
                             if bitrate > best_bitrate or not best:
                                 best = stream_url
                                 best_bitrate = bitrate
                         elif not best and "aac" in codec:
                             best = stream_url
-                            best_bitrate = bitrate
 
                     if best:
                         return best
-
-                    # Fallback: первый аудио стрим
                     if audio_streams:
                         return audio_streams[0].get("url")
             except Exception:
                 continue
-
         return None
 
     async def _invidious_stream(self, video_id: str) -> Optional[str]:
@@ -683,7 +719,6 @@ class StreamResolver:
         session = await self._get_session()
         for instance in self.INVIDIOUS_INSTANCES:
             try:
-                # Сначала пробуем itag 251 (opus 160kbps)
                 url = f"{instance}/latest_version?id={video_id}&itag=251&local=true"
                 async with session.get(
                     url, timeout=aiohttp.ClientTimeout(total=10),
@@ -696,7 +731,6 @@ class StreamResolver:
                     elif resp.status == 200:
                         return str(resp.url)
 
-                # Fallback: itag 140 (aac 128kbps)
                 url = f"{instance}/latest_version?id={video_id}&itag=140&local=true"
                 async with session.get(
                     url, timeout=aiohttp.ClientTimeout(total=10),
@@ -709,7 +743,6 @@ class StreamResolver:
                     elif resp.status == 200:
                         return str(resp.url)
 
-                # Fallback: через API
                 url = f"{instance}/api/v1/videos/{video_id}"
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status != 200:
@@ -721,43 +754,6 @@ class StreamResolver:
                             return fmt["url"]
             except Exception:
                 continue
-
-        return None
-
-    async def _cobalt_stream(self, video_id: str) -> Optional[str]:
-        """Получить стрим через Cobalt API"""
-        try:
-            session = await self._get_session()
-            youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-
-            async with session.post(
-                f"{self.COBALT_URL}/",
-                json={
-                    "url": youtube_url,
-                    "downloadMode": "audio",
-                    "audioFormat": "opus",
-                },
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                },
-            ) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-
-                if data.get("status") == "redirect":
-                    return data.get("url")
-                elif data.get("status") == "stream":
-                    return data.get("url")
-                elif data.get("status") == "picker":
-                    # Выбираем первый вариант
-                    pickers = data.get("picker", [])
-                    if pickers:
-                        return pickers[0].get("url")
-        except Exception as e:
-            logger.debug(f"[Cobalt] Stream error: {e}")
-
         return None
 
     async def close(self):

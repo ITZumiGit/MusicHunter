@@ -20,7 +20,7 @@ WORKDIR /app/backend
 EXPOSE 8000
 
 # Запускаем и бэкенд и бота через supervisord
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends supervisor ffmpeg curl && rm -rf /var/lib/apt/lists/* && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp
 
 COPY supervisord.conf /etc/supervisor/conf.d/musichunter.conf
 
