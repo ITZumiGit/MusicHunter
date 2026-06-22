@@ -196,37 +196,39 @@ async def get_stream(track_id: str):
         raise HTTPException(404, "Stream URL not found")
     
     import httpx
+    client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60.0, connect=10.0, read=30.0))
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60.0, connect=10.0, read=30.0)) as client:
-            req = client.build_request("GET", url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "*/*",
-            })
-            resp = await client.send(req, stream=True)
-            if resp.status_code != 200:
+        req = client.build_request("GET", url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "*/*",
+        })
+        resp = await client.send(req, stream=True)
+        if resp.status_code != 200:
+            await resp.aclose()
+            await client.aclose()
+            raise HTTPException(502, f"Upstream returned {resp.status_code}")
+        
+        content_type = resp.headers.get("content-type", "audio/webm")
+        
+        async def audio_generator():
+            try:
+                async for chunk in resp.aiter_bytes(chunk_size=32768):
+                    yield chunk
+            finally:
                 await resp.aclose()
-                raise HTTPException(502, f"Upstream returned {resp.status_code}")
-            
-            content_type = resp.headers.get("content-type", "audio/webm")
-            
-            async def audio_generator():
-                try:
-                    async for chunk in resp.aiter_bytes(chunk_size=32768):
-                        yield chunk
-                finally:
-                    await resp.aclose()
-            
-            return StreamingResponse(
-                audio_generator(),
-                media_type=content_type,
-                headers={
-                    "Cache-Control": "public, max-age=3600",
-                    "Accept-Ranges": "none",
-                },
-            )
+                await client.aclose()
+        
+        return StreamingResponse(
+            audio_generator(),
+            media_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
     except HTTPException:
         raise
     except Exception as e:
+        await client.aclose()
         raise HTTPException(502, f"Stream proxy error: {str(e)}")
 
 
@@ -247,37 +249,40 @@ async def download_track(track_id: str):
         raise HTTPException(404, "Stream URL not found")
     
     import httpx
+    client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(120.0, connect=10.0, read=60.0))
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(120.0, connect=10.0, read=60.0)) as client:
-            req = client.build_request("GET", url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "*/*",
-            })
-            resp = await client.send(req, stream=True)
-            if resp.status_code != 200:
+        req = client.build_request("GET", url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "*/*",
+        })
+        resp = await client.send(req, stream=True)
+        if resp.status_code != 200:
+            await resp.aclose()
+            await client.aclose()
+            raise HTTPException(502, f"Upstream returned {resp.status_code}")
+        
+        content_type = resp.headers.get("content-type", "audio/webm")
+        
+        async def audio_generator():
+            try:
+                async for chunk in resp.aiter_bytes(chunk_size=32768):
+                    yield chunk
+            finally:
                 await resp.aclose()
-                raise HTTPException(502, f"Upstream returned {resp.status_code}")
-            
-            content_type = resp.headers.get("content-type", "audio/webm")
-            
-            async def audio_generator():
-                try:
-                    async for chunk in resp.aiter_bytes(chunk_size=32768):
-                        yield chunk
-                finally:
-                    await resp.aclose()
-            
-            return StreamingResponse(
-                audio_generator(),
-                media_type=content_type,
-                headers={
-                    "Content-Disposition": f'attachment; filename="{track_id}.webm"',
-                    "Cache-Control": "no-cache",
-                },
-            )
+                await client.aclose()
+        
+        return StreamingResponse(
+            audio_generator(),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{track_id}.webm"',
+                "Cache-Control": "no-cache",
+            },
+        )
     except HTTPException:
         raise
     except Exception as e:
+        await client.aclose()
         raise HTTPException(502, f"Download proxy error: {str(e)}")
 
 
@@ -286,25 +291,29 @@ async def download_track(track_id: str):
 async def proxy_cover(url: str = Query(..., max_length=500)):
     """Прокси обложек через бэкенд"""
     import httpx
+    client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(15.0))
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(15.0)) as client:
-            resp = await client.get(url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            })
-            if resp.status_code != 200:
-                raise HTTPException(502, f"Upstream {resp.status_code}")
-            content_type = resp.headers.get("content-type", "image/jpeg")
-            return StreamingResponse(
-                iter([resp.content]),
-                media_type=content_type,
-                headers={
-                    "Cache-Control": "public, max-age=86400",
-                    "Content-Length": str(len(resp.content)),
-                },
-            )
+        resp = await client.get(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        })
+        if resp.status_code != 200:
+            raise HTTPException(502, f"Upstream {resp.status_code}")
+        content_type = resp.headers.get("content-type", "image/jpeg")
+        body = resp.content
+        await client.aclose()
+        return StreamingResponse(
+            iter([body]),
+            media_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "Content-Length": str(len(body)),
+            },
+        )
     except HTTPException:
+        await client.aclose()
         raise
     except Exception as e:
+        await client.aclose()
         raise HTTPException(502, f"Cover proxy error: {str(e)}")
 
 
