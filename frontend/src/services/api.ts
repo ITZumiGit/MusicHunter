@@ -45,9 +45,19 @@ export interface Stats {
 
 // ─── Search ──────────────────────────────────
 export async function searchTracks(query: string, limit = 50): Promise<SearchResult> {
-  const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`)
-  if (!res.ok) throw new Error('Ошибка поиска')
-  return res.json()
+  const url = `${API_URL}/search?q=${encodeURIComponent(query)}&limit=${limit}`
+  console.log('[MusicHunter] Fetching:', url)
+  try {
+    const res = await fetch(url)
+    console.log('[MusicHunter] Response status:', res.status, res.ok)
+    if (!res.ok) throw new Error(`Сервер вернул ${res.status}`)
+    const data = await res.json()
+    console.log('[MusicHunter] Got', data.count, 'tracks')
+    return data
+  } catch (e: any) {
+    console.error('[MusicHunter] Fetch failed:', e?.message || e)
+    throw e
+  }
 }
 
 // ─── Stream ──────────────────────────────────

@@ -46,7 +46,8 @@
     <Transition name="slide-up">
       <div v-if="expanded" class="full-player">
         <button class="close-btn-top" @click="expanded = false">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          <span class="close-btn-label">Свернуть</span>
         </button>
         <div class="full-cover">
           <img v-if="currentTrack.cover_url" :src="currentTrack.cover_url" :alt="currentTrack.title" />
@@ -200,11 +201,14 @@ async function handleDownload() {
 
 .full-player { padding: var(--space-xl); padding-bottom: calc(var(--nav-height) + var(--space-xl)); }
 .close-btn-top {
-  display: flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; margin: 0 auto var(--space-lg);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: auto; height: 44px; margin: 0 auto var(--space-lg);
+  padding: 0 20px;
   border-radius: var(--radius-full); color: var(--fg-secondary); transition: all var(--transition);
+  background: var(--bg-tertiary);
 }
-.close-btn-top:hover { background: var(--bg-tertiary); color: var(--fg-primary); }
+.close-btn-label { font-size: 13px; font-weight: 500; }
+.close-btn-top:hover { background: var(--border-light); color: var(--fg-primary); }
 .full-cover { width: 280px; height: 280px; margin: 0 auto var(--space-xl); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-lg); }
 .full-cover img { width: 100%; height: 100%; object-fit: cover; }
 .cover-placeholder-lg { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--bg-tertiary); color: var(--fg-muted); }

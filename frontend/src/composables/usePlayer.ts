@@ -108,7 +108,7 @@ export function usePlayer() {
     // 2. Локальные файлы бота (local_*) — прямой URL
     if (!url && track.id.startsWith('local_')) {
       const fileId = track.id.slice(6)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://musichunter.ru'
       url = `${apiUrl}/local/${fileId}`
     }
     

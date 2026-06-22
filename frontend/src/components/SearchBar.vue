@@ -1,6 +1,6 @@
 <template>
   <div class="search-bar">
-    <div class="input-wrap">
+    <form class="input-wrap" @submit.prevent="submit">
       <!-- Search icon -->
       <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/>
@@ -10,21 +10,30 @@
       <input
         ref="inputRef"
         v-model="query"
-        type="text"
+        type="search"
         placeholder="Поиск музыки..."
-        @keydown.enter="submit"
         :disabled="loading"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        enterkeyhint="search"
       />
       
-      <button v-if="query" class="clear" @click="clear">
+      <button v-if="query" class="clear" type="button" @click="clear">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
       
-      <div v-if="loading" class="spinner"></div>
-    </div>
+      <button class="search-btn" type="submit" :disabled="!query.trim() || loading">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+      </button>
+    </form>
   </div>
 </template>
 
@@ -48,7 +57,6 @@ function clear() {
   inputRef.value?.focus()
 }
 
-// Auto-focus on mount
 onMounted(() => {
   inputRef.value?.focus()
 })
@@ -66,7 +74,7 @@ onMounted(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 0 var(--space-md);
+  padding: 0 var(--space-sm) 0 var(--space-md);
   height: 48px;
   transition: all var(--transition);
 }
@@ -86,6 +94,9 @@ input {
   font-size: 15px;
   height: 100%;
   background: transparent;
+  outline: none;
+  border: none;
+  color: var(--fg-primary);
 }
 
 input::placeholder {
@@ -94,6 +105,11 @@ input::placeholder {
 
 input:disabled {
   opacity: 0.6;
+}
+
+/* Remove default search X in WebKit */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
 }
 
 .clear {
@@ -112,12 +128,25 @@ input:disabled {
   color: var(--fg-primary);
 }
 
-.spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: white;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.search-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.search-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

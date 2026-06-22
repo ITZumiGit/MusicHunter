@@ -12,6 +12,20 @@
       <p>Ищем музыку...</p>
     </div>
     
+    <!-- Error -->
+    <div v-else-if="errorMsg" class="state-container error-state">
+      <div class="error-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <h3>Ошибка загрузки</h3>
+      <p class="error-text">{{ errorMsg }}</p>
+      <button class="retry-btn" @click="retryLastSearch">Повторить</button>
+    </div>
+    
     <!-- Results -->
     <div v-else-if="results.length" class="results-container">
       <div class="results-header">
@@ -67,22 +81,33 @@ const player = inject<any>('player')
 const loading = ref(false)
 const searched = ref(false)
 const results = ref<Track[]>([])
+const errorMsg = ref('')
+const lastQuery = ref('')
 
 async function handleSearch(query: string) {
   if (!query.trim()) return
   
+  lastQuery.value = query
   loading.value = true
   searched.value = true
+  errorMsg.value = ''
   
   try {
     const data = await searchTracks(query)
     console.log('[MusicHunter] Search results:', data.count)
     results.value = data.tracks
-  } catch (e) {
+  } catch (e: any) {
     console.error('[MusicHunter] Search error:', e)
+    errorMsg.value = e?.message || 'Не удалось выполнить поиск'
     results.value = []
   } finally {
     loading.value = false
+  }
+}
+
+function retryLastSearch() {
+  if (lastQuery.value) {
+    handleSearch(lastQuery.value)
   }
 }
 
@@ -113,7 +138,7 @@ function onPlayTrack(track: Track, index: number) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-xl) * 2;
+  padding: calc(var(--space-xl) * 2);
   text-align: center;
   color: var(--fg-secondary);
 }
@@ -128,6 +153,37 @@ function onPlayTrack(track: Track, index: number) {
 .state-container p {
   font-size: 14px;
   color: var(--fg-secondary);
+}
+
+.error-state {
+  padding-top: 20%;
+}
+
+.error-icon {
+  color: var(--pink, #fd79a8);
+  margin-bottom: var(--space-lg);
+}
+
+.error-text {
+  color: var(--fg-muted);
+  font-size: 13px;
+  max-width: 260px;
+  word-break: break-word;
+  margin-bottom: var(--space-md);
+}
+
+.retry-btn {
+  padding: 8px 24px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all var(--transition);
+}
+
+.retry-btn:hover {
+  background: var(--accent-hover);
 }
 
 .spinner {
