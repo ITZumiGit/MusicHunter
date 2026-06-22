@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  musichunter:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - FRONTEND_URL=${FRONTEND_URL:-https://musichunter.vercel.app}
+      - LOCAL_MUSIC_DIR=./music
+    volumes:
+      - ./backend/music:/app/backend/music
+      - ./data:/app/backend/data
+    restart: unless-stopped
