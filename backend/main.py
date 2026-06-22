@@ -198,23 +198,21 @@ async def get_stream(track_id: str):
     import aiohttp
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=60, sock_read=30)) as resp:
                 if resp.status != 200:
                     raise HTTPException(502, f"Upstream returned {resp.status}")
                 
-                content_type = resp.headers.get("Content-Type", "audio/mpeg")
-                content_length = resp.headers.get("Content-Length")
+                content_type = resp.headers.get("Content-Type", "audio/webm")
                 
                 headers = {
                     "Content-Type": content_type,
-                    "Accept-Ranges": "bytes",
                     "Cache-Control": "public, max-age=3600",
+                    "Transfer-Encoding": "chunked",
                 }
-                if content_length:
-                    headers["Content-Length"] = content_length
+                # Не передаём Content-Length — стримим чанками, избегаем mismatch
                 
                 async def audio_generator():
-                    async for chunk in resp.content.iter_chunked(65536):
+                    async for chunk in resp.content.iter_chunked(32768):
                         yield chunk
                 
                 return StreamingResponse(audio_generator(), media_type=content_type, headers=headers)
@@ -225,7 +223,7 @@ async def get_stream(track_id: str):
 
 
 @app.get("/stream-url/{track_id:path}")
-async def get_stream_url(track_id: str):
+async def get_stream_url_endpoint(track_id: str):
     """Вернуть прямой URL (для внутреннего использования)"""
     url = await music.get_stream_url(track_id)
     if not url:
@@ -243,24 +241,20 @@ async def download_track(track_id: str):
     import aiohttp
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=120, sock_read=60)) as resp:
                 if resp.status != 200:
                     raise HTTPException(502, f"Upstream returned {resp.status}")
                 
-                content_type = resp.headers.get("Content-Type", "audio/mpeg")
-                content_length = resp.headers.get("Content-Length")
+                content_type = resp.headers.get("Content-Type", "audio/webm")
                 
                 headers = {
                     "Content-Type": content_type,
                     "Content-Disposition": f'attachment; filename="{track_id}.webm"',
-                    "Accept-Ranges": "bytes",
                     "Cache-Control": "no-cache",
                 }
-                if content_length:
-                    headers["Content-Length"] = content_length
                 
                 async def audio_generator():
-                    async for chunk in resp.content.iter_chunked(65536):
+                    async for chunk in resp.content.iter_chunked(32768):
                         yield chunk
                 
                 return StreamingResponse(audio_generator(), media_type=content_type, headers=headers)
