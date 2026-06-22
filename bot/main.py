@@ -38,7 +38,7 @@ async def start_cmd(message: Message):
         [
             InlineKeyboardButton(
                 text="📢 Канал Завоз Идей",
-                url="https://t.me/zavoz_idey",
+                url="https://t.me/zavozide",
             )
         ],
     ])
