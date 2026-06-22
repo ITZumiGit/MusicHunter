@@ -1,0 +1,10 @@
+__pycache__/
+*.db
+.env
+music/*.mp3
+music/*.opus
+music/*.ogg
+music/*.m4a
+music/*.wav
+music/*.flac
+music/*.webm

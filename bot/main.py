@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # URL Mini App — берём из env или дефолт
-MINI_APP_URL = os.getenv("FRONTEND_URL", "https://musichunter.vercel.app")
+MINI_APP_URL = os.getenv("FRONTEND_URL", "https://music-hunter-llart.vercel.app")
 
 
 @router.message(CommandStart())
