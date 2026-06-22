@@ -76,8 +76,10 @@ async function handleSearch(query: string) {
   
   try {
     const data = await searchTracks(query)
+    console.log('[MusicHunter] Search results:', data.count)
     results.value = data.tracks
-  } catch {
+  } catch (e) {
+    console.error('[MusicHunter] Search error:', e)
     results.value = []
   } finally {
     loading.value = false
