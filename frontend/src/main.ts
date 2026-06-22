@@ -9,12 +9,12 @@ import App from './App.vue'
 import './styles/variables.css'
 import './styles/base.css'
 
-// Views
-import SearchView from './views/SearchView.vue'
-import LikesView from './views/LikesView.vue'
-import PlaylistsView from './views/PlaylistsView.vue'
-import HistoryView from './views/HistoryView.vue'
-import DownloadedView from './views/DownloadedView.vue'
+// Lazy-loaded views — загружаются только при переходе
+const SearchView = () => import('./views/SearchView.vue')
+const LikesView = () => import('./views/LikesView.vue')
+const PlaylistsView = () => import('./views/PlaylistsView.vue')
+const HistoryView = () => import('./views/HistoryView.vue')
+const DownloadedView = () => import('./views/DownloadedView.vue')
 
 // Router
 const router = createRouter({
