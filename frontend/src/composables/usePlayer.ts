@@ -138,8 +138,22 @@ function togglePlay() {
 }
 
 function seek(percent: number) {
-  if (!audio || !duration.value || !isFinite(duration.value)) return
-  const time = (percent / 100) * duration.value
+  if (!audio) return
+  // Если duration неизвестен (Infinity/NaN для стримов) — пробуем по проценту от 0
+  const dur = (duration.value && isFinite(duration.value)) ? duration.value : 0
+  if (dur === 0) {
+    // Для стримов без известной длительности — пытаемся установить напрямую
+    // Браузер сам обработает, если может
+    const estimatedTime = (percent / 100) * 300 // предполагаем ~5мин
+    if (audio.duration && isFinite(audio.duration)) {
+      audio.currentTime = (percent / 100) * audio.duration
+    } else {
+      // Последний шанс — ставим напрямую и надеемся на Range support
+      try { audio.currentTime = estimatedTime } catch { /* ignore */ }
+    }
+    return
+  }
+  const time = (percent / 100) * dur
   if (isFinite(time) && time >= 0) {
     audio.currentTime = time
   }
