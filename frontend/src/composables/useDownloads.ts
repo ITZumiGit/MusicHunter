@@ -102,14 +102,9 @@ export function useDownloads() {
       const fileId = track.id.slice(6)
       blob = await downloadLocalTrack(fileId)
     } else {
-      // Онлайн треки — через стрим-прокси
-      let streamUrl = track.url
-      if (!streamUrl || !streamUrl.startsWith('http')) {
-        streamUrl = await getStreamUrl(track.id)
-      }
-      if (!streamUrl) throw new Error('Нет URL для скачивания')
-
-      const response = await fetch(streamUrl)
+      // Онлайн треки — через /download/ эндпоинт (полный файл)
+      const downloadUrl = `${API_URL}/download/${encodeURIComponent(track.id)}`
+      const response = await fetch(downloadUrl)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       blob = await response.blob()
     }

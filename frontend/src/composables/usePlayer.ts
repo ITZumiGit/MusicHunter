@@ -109,7 +109,14 @@ async function play(track: Track) {
 
   if (url && audio) {
     audio.src = url
+    // Для стримов нужно дождаться canplay перед воспроизведением
+    const canPlayPromise = new Promise<void>((resolve) => {
+      if (audio!.readyState >= 3) resolve() // уже готов
+      else audio!.addEventListener('canplay', () => resolve(), { once: true })
+    })
+    
     try {
+      await canPlayPromise
       await audio.play()
       isPlaying.value = true
     } catch {
@@ -139,23 +146,28 @@ function togglePlay() {
 
 function seek(percent: number) {
   if (!audio) return
-  // Если duration неизвестен (Infinity/NaN для стримов) — пробуем по проценту от 0
-  const dur = (duration.value && isFinite(duration.value)) ? duration.value : 0
-  if (dur === 0) {
-    // Для стримов без известной длительности — пытаемся установить напрямую
-    // Браузер сам обработает, если может
-    const estimatedTime = (percent / 100) * 300 // предполагаем ~5мин
-    if (audio.duration && isFinite(audio.duration)) {
-      audio.currentTime = (percent / 100) * audio.duration
-    } else {
-      // Последний шанс — ставим напрямую и надеемся на Range support
-      try { audio.currentTime = estimatedTime } catch { /* ignore */ }
+  
+  const dur = duration.value
+  const isStream = !isFinite(dur) || dur === 0
+  
+  if (isStream) {
+    // Для стримов — пробуем установить currentTime напрямую
+    // Браузер использует Range requests для перехода к нужной позиции
+    const estimatedDuration = 300 // fallback 5 минут
+    const targetTime = (percent / 100) * estimatedDuration
+    
+    try {
+      audio.currentTime = targetTime
+      currentTime.value = targetTime
+    } catch (e) {
+      console.warn('[seek] Failed to set time for stream:', e)
     }
-    return
-  }
-  const time = (percent / 100) * dur
-  if (isFinite(time) && time >= 0) {
-    audio.currentTime = time
+  } else {
+    // Для обычных файлов с известной длительностью
+    const time = (percent / 100) * dur
+    if (isFinite(time) && time >= 0) {
+      audio.currentTime = time
+    }
   }
 }
 
