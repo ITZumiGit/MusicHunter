@@ -189,8 +189,8 @@ async def search_tracks(q: str = Query(..., min_length=1), limit: int = Query(30
 
 # ─── Stream (proxy audio through backend) ───
 @app.get("/stream/{track_id:path}")
-async def get_stream(track_id: str):
-    """Проксируем аудио через бэкенд — пользователь не может напрямую на Google Video"""
+async def get_stream(track_id: str, request: Request):
+    """Проксируем аудио через бэкенд с поддержкой Range requests"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
@@ -198,17 +198,33 @@ async def get_stream(track_id: str):
     import httpx
     client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60.0, connect=10.0, read=30.0))
     try:
-        req = client.build_request("GET", url, headers={
+        # Пробрасываем Range header от клиента для поддержки перемотки
+        headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "*/*",
-        })
+        }
+        if "range" in request.headers:
+            headers["Range"] = request.headers["range"]
+        
+        req = client.build_request("GET", url, headers=headers)
         resp = await client.send(req, stream=True)
-        if resp.status_code != 200:
+        
+        if resp.status_code not in [200, 206]:
             await resp.aclose()
             await client.aclose()
             raise HTTPException(502, f"Upstream returned {resp.status_code}")
         
-        content_type = resp.headers.get("content-type", "audio/webm")
+        content_type = resp.headers.get("content-type", "audio/mpeg")
+        
+        # Пробрасываем важные заголовки от upstream
+        proxy_headers = {
+            "Cache-Control": "public, max-age=3600",
+            "Accept-Ranges": "bytes",
+        }
+        if "content-length" in resp.headers:
+            proxy_headers["Content-Length"] = resp.headers["content-length"]
+        if "content-range" in resp.headers:
+            proxy_headers["Content-Range"] = resp.headers["content-range"]
         
         async def audio_generator():
             try:
@@ -220,10 +236,9 @@ async def get_stream(track_id: str):
         
         return StreamingResponse(
             audio_generator(),
+            status_code=resp.status_code,
             media_type=content_type,
-            headers={
-                "Cache-Control": "public, max-age=3600",
-            },
+            headers=proxy_headers,
         )
     except HTTPException:
         raise
