@@ -4,7 +4,7 @@
  * Аудио стримы не кешируются здесь — они кешируются через IndexedDB (useDownloads).
  */
 
-const CACHE_NAME = 'musichunter-v1'
+const CACHE_NAME = 'musichunter-v2-20260628'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -73,18 +73,17 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Статические ресурсы (JS, CSS, изображения) — cache-first
+  // Статические ресурсы (JS, CSS, изображения) — network-first с кэшированием
+  // Для Vite ассетов с хэш-именами это гарантирует актуальную версию
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached
-      return fetch(request).then((response) => {
-        // Кешируем только успешные ответы
-        if (response.ok && request.method === 'GET') {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
-        }
-        return response
-      })
+    fetch(request).then((response) => {
+      if (response.ok && request.method === 'GET') {
+        const clone = response.clone()
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+      }
+      return response
+    }).catch(() => {
+      return caches.match(request)
     })
   )
 })
