@@ -97,7 +97,9 @@ const botSection = ref<HTMLElement | null>(null)
 
 onMounted(async () => {
   try {
-    const data = await getLocalTracks()
+    const tgId = player.tgUserId.value
+    if (!tgId) return
+    const data = await getLocalTracks(tgId)
     localTracks.value = data.tracks
   } catch {
     localTracks.value = []
