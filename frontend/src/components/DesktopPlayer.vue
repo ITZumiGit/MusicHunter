@@ -5,11 +5,12 @@
       <div class="progress-fill" :style="{ width: progress + '%' }"></div>
     </div>
     <div class="player-content">
-      <!-- Left: Track info -->
+      <!-- Left: Track info + visualizer -->
       <div class="player-left">
-        <div class="player-cover">
-          <img v-if="currentTrack.cover_url" :src="currentTrack.cover_url" :alt="currentTrack.title" />
-          <div v-else class="cover-placeholder">
+        <div class="player-cover" @click="toggleVisualizer">
+          <img v-if="currentTrack.cover_url && !showVisualizer" :src="currentTrack.cover_url" :alt="currentTrack.title" />
+          <canvas v-show="showVisualizer" ref="desktopVisualizerCanvas" class="visualizer-canvas-cover"></canvas>
+          <div v-if="!currentTrack.cover_url && !showVisualizer" class="cover-placeholder">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           </div>
         </div>
@@ -69,8 +70,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useDownloads } from '../composables/useDownloads'
+import { useVisualizer } from '../composables/useVisualizer'
+import { usePlayer } from '../composables/usePlayer'
 
 const props = defineProps<{
   currentTrack: any
@@ -95,10 +98,49 @@ const props = defineProps<{
 }>()
 
 const downloads = useDownloads()
+const player = usePlayer()
+const visualizer = useVisualizer()
 const downloading = ref(false)
+const showVisualizer = ref(false)
+const desktopVisualizerCanvas = ref<HTMLCanvasElement | null>(null)
 
 const isDownloaded = computed(() => {
   return props.currentTrack ? downloads.isDownloaded(props.currentTrack.id) : false
+})
+
+function toggleVisualizer() {
+  showVisualizer.value = !showVisualizer.value
+  if (showVisualizer.value && props.isPlaying) {
+    nextTick(() => {
+      if (desktopVisualizerCanvas.value) {
+        const audioEl = player.getAudioElement()
+        if (audioEl) {
+          desktopVisualizerCanvas.value.width = 48
+          desktopVisualizerCanvas.value.height = 48
+          visualizer.init(audioEl, desktopVisualizerCanvas.value)
+        }
+      }
+    })
+  } else {
+    visualizer.stop()
+  }
+}
+
+watch(() => props.isPlaying, (playing) => {
+  if (showVisualizer.value && playing) {
+    nextTick(() => {
+      if (desktopVisualizerCanvas.value) {
+        const audioEl = player.getAudioElement()
+        if (audioEl) {
+          desktopVisualizerCanvas.value.width = 48
+          desktopVisualizerCanvas.value.height = 48
+          visualizer.init(audioEl, desktopVisualizerCanvas.value)
+        }
+      }
+    })
+  } else if (!playing) {
+    visualizer.stop()
+  }
 })
 
 function handleSeek(e: MouseEvent) {
@@ -109,6 +151,8 @@ function handleSeek(e: MouseEvent) {
 }
 
 function handleStop() {
+  visualizer.stop()
+  showVisualizer.value = false
   props.stop()
 }
 
@@ -122,6 +166,10 @@ async function handleDownload() {
   }
   downloading.value = false
 }
+
+onBeforeUnmount(() => {
+  visualizer.cleanup()
+})
 </script>
 
 <style scoped>
@@ -139,9 +187,18 @@ async function handleDownload() {
   padding: 0 var(--space-lg); gap: var(--space-lg);
 }
 .player-left { display: flex; align-items: center; gap: var(--space-md); min-width: 0; }
-.player-cover { width: 48px; height: 48px; border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0; }
+.player-cover {
+  width: 48px; height: 48px; border-radius: var(--radius-sm);
+  overflow: hidden; flex-shrink: 0; cursor: pointer;
+  position: relative;
+}
+.player-cover:hover { opacity: 0.85; }
 .player-cover img { width: 100%; height: 100%; object-fit: cover; }
 .cover-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--bg-tertiary); color: var(--fg-muted); }
+.visualizer-canvas-cover {
+  width: 100%; height: 100%; display: block;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(244, 114, 182, 0.1));
+}
 .player-info { min-width: 0; }
 .player-title { font-size: 14px; font-weight: 500; color: var(--fg-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-artist { font-size: 12px; color: var(--fg-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }

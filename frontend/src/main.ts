@@ -32,3 +32,16 @@ const router = createRouter({
 const app = createApp(App)
 app.use(router)
 app.mount('#app')
+
+// Register Service Worker for offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => {
+        console.log('[SW] Registered, scope:', reg.scope)
+      })
+      .catch((err) => {
+        console.warn('[SW] Registration failed:', err)
+      })
+  })
+}

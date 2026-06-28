@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
@@ -321,31 +321,22 @@ async def proxy_cover(url: str = Query(..., max_length=500)):
 LOCAL_MUSIC_DIR = os.getenv("LOCAL_MUSIC_DIR", "./music")
 
 
-@app.get("/local")
-async def list_local_tracks():
-    """Список аудиофайлов из папки бота — отображаются в Mini App"""
-    if not os.path.isdir(LOCAL_MUSIC_DIR):
-        return {"count": 0, "tracks": []}
-
+def _scan_music_dir(dir_path: str, prefix: str = "") -> list:
+    """Сканирует папку с аудиофайлами, возвращает список TrackResponse"""
+    import hashlib
     supported = (".mp3", ".opus", ".ogg", ".m4a", ".wav", ".flac", ".webm")
     tracks = []
-
-    for fname in sorted(os.listdir(LOCAL_MUSIC_DIR)):
+    if not os.path.isdir(dir_path):
+        return tracks
+    for fname in sorted(os.listdir(dir_path)):
         if not fname.lower().endswith(supported):
             continue
-        filepath = os.path.join(LOCAL_MUSIC_DIR, fname)
-        stat = os.stat(filepath)
-        # ID = хэш от имени файла
-        import hashlib
-        file_id = hashlib.md5(fname.encode()).hexdigest()[:12]
-        # Убираем расширение для названия
+        file_id = hashlib.md5(f"{prefix}/{fname}".encode()).hexdigest()[:12]
         name = os.path.splitext(fname)[0]
-        # Пытаемся разделить "Artist - Title"
         if " - " in name:
             artist, title = name.split(" - ", 1)
         else:
             artist, title = "Unknown", name
-
         tracks.append(TrackResponse(
             id=f"local_{file_id}",
             title=title.strip(),
@@ -355,41 +346,110 @@ async def list_local_tracks():
             url=f"/local/{file_id}",
             cover_url="",
         ))
+    return tracks
+
+
+@app.get("/local")
+async def list_local_tracks(tg_id: int = Query(0)):
+    """Список аудиофайлов пользователя: личные + из чатов"""
+    if not tg_id:
+        return {"count": 0, "tracks": []}
+    if not os.path.isdir(LOCAL_MUSIC_DIR):
+        return {"count": 0, "tracks": []}
+
+    tracks = []
+    # Личные файлы пользователя: music/{tg_id}/
+    personal_dir = os.path.join(LOCAL_MUSIC_DIR, str(tg_id))
+    tracks.extend(_scan_music_dir(personal_dir, prefix=str(tg_id)))
+
+    # Файлы из групповых чатов: music/chat_{chat_id}/
+    # Показываем все групповые папки — доступ к боту в группе = право слушать
+    for entry in sorted(os.listdir(LOCAL_MUSIC_DIR)):
+        entry_path = os.path.join(LOCAL_MUSIC_DIR, entry)
+        if os.path.isdir(entry_path) and entry.startswith("chat_"):
+            tracks.extend(_scan_music_dir(entry_path, prefix=entry))
 
     return {"count": len(tracks), "tracks": tracks}
 
 
 @app.get("/local/{file_id}")
-async def stream_local_track(file_id: str):
-    """Стрим локального аудиофайла"""
+async def stream_local_track(file_id: str, request: Request):
+    """Стрим локального аудиофайла с поддержкой Range-запросов"""
     if not os.path.isdir(LOCAL_MUSIC_DIR):
         raise HTTPException(404, "Music directory not found")
 
     import hashlib
     supported = (".mp3", ".opus", ".ogg", ".m4a", ".wav", ".flac", ".webm")
+    content_types = {
+        ".mp3": "audio/mpeg", ".opus": "audio/opus", ".ogg": "audio/ogg",
+        ".m4a": "audio/mp4", ".wav": "audio/wav", ".flac": "audio/flac",
+        ".webm": "audio/webm",
+    }
 
-    for fname in os.listdir(LOCAL_MUSIC_DIR):
-        if not fname.lower().endswith(supported):
-            continue
-        fid = hashlib.md5(fname.encode()).hexdigest()[:12]
-        if fid == file_id:
-            filepath = os.path.join(LOCAL_MUSIC_DIR, fname)
-            ext = os.path.splitext(fname)[1].lower()
-            content_types = {
-                ".mp3": "audio/mpeg", ".opus": "audio/opus", ".ogg": "audio/ogg",
-                ".m4a": "audio/mp4", ".wav": "audio/wav", ".flac": "audio/flac",
-                ".webm": "audio/webm",
-            }
-            ct = content_types.get(ext, "audio/mpeg")
-            return StreamingResponse(
-                open(filepath, "rb"),
-                media_type=ct,
-                headers={
-                    "Content-Length": str(os.path.getsize(filepath)),
-                    "Accept-Ranges": "bytes",
-                    "Cache-Control": "public, max-age=86400",
-                },
-            )
+    # Рекурсивный поиск: music/ и music/{subdir}/
+    search_dirs = [LOCAL_MUSIC_DIR]
+    if os.path.isdir(LOCAL_MUSIC_DIR):
+        for entry in os.listdir(LOCAL_MUSIC_DIR):
+            entry_path = os.path.join(LOCAL_MUSIC_DIR, entry)
+            if os.path.isdir(entry_path):
+                search_dirs.append(entry_path)
+
+    for search_dir in search_dirs:
+        prefix = os.path.basename(search_dir) if search_dir != LOCAL_MUSIC_DIR else ""
+        for fname in os.listdir(search_dir):
+            if not fname.lower().endswith(supported):
+                continue
+            fid = hashlib.md5(f"{prefix}/{fname}".encode()).hexdigest()[:12]
+            if fid == file_id:
+                filepath = os.path.join(search_dir, fname)
+                ext = os.path.splitext(fname)[1].lower()
+                ct = content_types.get(ext, "audio/mpeg")
+                file_size = os.path.getsize(filepath)
+
+                # Parse Range header
+                range_header = request.headers.get("range")
+                if range_header:
+                    # Format: "bytes=start-end"
+                    range_match = range_header.replace("bytes=", "")
+                    parts = range_match.split("-")
+                    start = int(parts[0]) if parts[0] else 0
+                    end = int(parts[1]) if parts[1] else file_size - 1
+                    end = min(end, file_size - 1)
+                    content_length = end - start + 1
+
+                    def range_generator():
+                        with open(filepath, "rb") as f:
+                            f.seek(start)
+                            remaining = content_length
+                            while remaining > 0:
+                                chunk = f.read(min(65536, remaining))
+                                if not chunk:
+                                    break
+                                remaining -= len(chunk)
+                                yield chunk
+
+                    return StreamingResponse(
+                        range_generator(),
+                        status_code=206,
+                        media_type=ct,
+                        headers={
+                            "Content-Range": f"bytes {start}-{end}/{file_size}",
+                            "Content-Length": str(content_length),
+                            "Accept-Ranges": "bytes",
+                            "Cache-Control": "public, max-age=86400",
+                        },
+                    )
+
+                # No Range — return full file
+                return StreamingResponse(
+                    open(filepath, "rb"),
+                    media_type=ct,
+                    headers={
+                        "Content-Length": str(file_size),
+                        "Accept-Ranges": "bytes",
+                        "Cache-Control": "public, max-age=86400",
+                    },
+                )
 
     raise HTTPException(404, "File not found")
 

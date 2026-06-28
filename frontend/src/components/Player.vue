@@ -55,9 +55,14 @@
             </button>
           </div>
           
-          <!-- Cover art -->
+          <!-- Visualizer OR Cover art -->
           <div class="full-cover-wrap">
-            <div class="full-cover">
+            <!-- Visualizer canvas (shown when playing) -->
+            <div v-if="isPlaying" class="visualizer-container">
+              <canvas ref="visualizerCanvas" class="visualizer-canvas"></canvas>
+            </div>
+            <!-- Cover art (shown when paused) -->
+            <div v-else class="full-cover">
               <img v-if="currentTrack.cover_url" :src="currentTrack.cover_url" :alt="currentTrack.title" />
               <div v-else class="cover-placeholder-lg">
                 <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -125,8 +130,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useDownloads } from '../composables/useDownloads'
+import { useVisualizer } from '../composables/useVisualizer'
+import { usePlayer } from '../composables/usePlayer'
 
 const props = defineProps<{
   currentTrack: any
@@ -151,11 +158,53 @@ const props = defineProps<{
 }>()
 
 const downloads = useDownloads()
+const player = usePlayer()
+const visualizer = useVisualizer()
 const expanded = ref(false)
 const downloading = ref(false)
+const visualizerCanvas = ref<HTMLCanvasElement | null>(null)
 
 const isDownloaded = computed(() => {
   return props.currentTrack ? downloads.isDownloaded(props.currentTrack.id) : false
+})
+
+// Initialize visualizer when expanded and playing
+watch([expanded, () => props.isPlaying], async ([isExpanded, isPlayingNow]) => {
+  if (isExpanded && isPlayingNow) {
+    await nextTick()
+    if (visualizerCanvas.value) {
+      const audioEl = player.getAudioElement()
+      if (audioEl) {
+        // Set canvas size
+        const container = visualizerCanvas.value.parentElement
+        if (container) {
+          visualizerCanvas.value.width = container.clientWidth
+          visualizerCanvas.value.height = container.clientHeight
+        }
+        visualizer.init(audioEl, visualizerCanvas.value)
+      }
+    }
+  } else if (!isPlayingNow) {
+    visualizer.stop()
+  }
+}, { immediate: true })
+
+// Resize canvas on expand
+watch(expanded, async (val) => {
+  if (val) {
+    await nextTick()
+    if (visualizerCanvas.value) {
+      const container = visualizerCanvas.value.parentElement
+      if (container) {
+        visualizerCanvas.value.width = container.clientWidth
+        visualizerCanvas.value.height = container.clientHeight
+      }
+    }
+  }
+})
+
+onBeforeUnmount(() => {
+  visualizer.cleanup()
 })
 
 function handleSeek(e: MouseEvent) {
@@ -167,6 +216,7 @@ function handleSeek(e: MouseEvent) {
 
 function handleStop() {
   expanded.value = false
+  visualizer.stop()
   props.stop()
 }
 
@@ -186,7 +236,7 @@ async function handleDownload() {
 <style scoped>
 .player-wrapper {
   position: fixed;
-  bottom: var(--nav-height); /* Above the nav bar */
+  bottom: var(--nav-height);
   left: 0;
   right: 0;
   z-index: 95;
@@ -358,7 +408,7 @@ async function handleDownload() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-lg);
 }
 
 .chevron-btn {
@@ -396,11 +446,29 @@ async function handleDownload() {
 .close-btn:active { transform: scale(0.9); }
 .close-btn:hover { color: var(--pink); }
 
-/* Cover */
+/* Visualizer / Cover */
 .full-cover-wrap {
   display: flex;
   justify-content: center;
-  margin-bottom: var(--space-2xl);
+  align-items: center;
+  margin-bottom: var(--space-lg);
+  flex: 1;
+  min-height: 0;
+}
+
+.visualizer-container {
+  width: min(280px, 70vw);
+  height: min(280px, 70vw);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 80px var(--accent-glow);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(244, 114, 182, 0.05));
+}
+
+.visualizer-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .full-cover {
@@ -430,7 +498,7 @@ async function handleDownload() {
 /* Info */
 .full-info {
   text-align: center;
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-lg);
 }
 
 .full-title {
@@ -450,7 +518,7 @@ async function handleDownload() {
 
 /* Progress */
 .full-progress {
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-lg);
 }
 
 .progress-bar-wrap {

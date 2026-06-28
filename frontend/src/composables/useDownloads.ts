@@ -4,7 +4,7 @@
  */
 import { ref, computed } from 'vue'
 import type { Track } from '../services/api'
-import { getStreamUrl } from '../services/api'
+import { getStreamUrl, downloadLocalTrack } from '../services/api'
 
 const DB_NAME = 'MusicHunterDB'
 const DB_VERSION = 1
@@ -95,19 +95,26 @@ export function useDownloads() {
   async function downloadTrack(track: Track): Promise<void> {
     if (downloadedIds.value.has(track.id)) return
 
-    // 1. Получаем URL стрима (через бэкенд прокси)
-    let streamUrl = track.url
-    if (!streamUrl || !streamUrl.startsWith('http')) {
-      streamUrl = getStreamUrl(track.id)
+    let blob: Blob
+
+    // Локальные файлы бота (local_*) — скачиваем напрямую через /local/ эндпоинт
+    if (track.id.startsWith('local_')) {
+      const fileId = track.id.slice(6)
+      blob = await downloadLocalTrack(fileId)
+    } else {
+      // Онлайн треки — через стрим-прокси
+      let streamUrl = track.url
+      if (!streamUrl || !streamUrl.startsWith('http')) {
+        streamUrl = await getStreamUrl(track.id)
+      }
+      if (!streamUrl) throw new Error('Нет URL для скачивания')
+
+      const response = await fetch(streamUrl)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      blob = await response.blob()
     }
-    if (!streamUrl) throw new Error('Нет URL для скачивания')
 
-    // 2. Скачиваем blob
-    const response = await fetch(streamUrl)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const blob = await response.blob()
-
-    // 3. Сохраняем в IndexedDB
+    // Сохраняем в IndexedDB
     const record = {
       id: track.id,
       title: track.title,
@@ -120,7 +127,7 @@ export function useDownloads() {
     }
     await putToDB(record)
 
-    // 4. Обновляем реактивное состояние
+    // Обновляем реактивное состояние
     downloadedIds.value = new Set([...downloadedIds.value, track.id])
     downloadedTracks.value = [...downloadedTracks.value, {
       id: track.id,

@@ -241,8 +241,21 @@ export async function downloadTrackAudio(trackId: string): Promise<Blob> {
 }
 
 // ─── Local Music (bot files) ─────────────────
-export async function getLocalTracks(): Promise<{ count: number; tracks: Track[] }> {
-  const res = await fetch(`${API_URL}/local`)
+export async function getLocalTracks(tgId: number): Promise<{ count: number; tracks: Track[] }> {
+  const res = await fetch(`${API_URL}/local?tg_id=${tgId}`)
   if (!res.ok) throw new Error('Ошибка загрузки локальной музыки')
   return res.json()
+}
+
+// ─── Download Local Track (get file blob for offline cache) ──
+export async function downloadLocalTrack(fileId: string): Promise<Blob> {
+  const url = `${API_URL}/local/${fileId}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Ошибка скачивания локального трека: HTTP ${res.status}`)
+  return res.blob()
+}
+
+// ─── Online status check ─────────────────────
+export function isOnline(): boolean {
+  return typeof navigator !== 'undefined' ? navigator.onLine : true
 }
