@@ -187,69 +187,106 @@ async def search_tracks(q: str = Query(..., min_length=1), limit: int = Query(30
     )
 
 
-# ─── Stream (proxy audio through backend) ───
+# ─── Stream (proxy audio through backend with WebM→MP3 conversion) ───
 @app.api_route("/stream/{track_id:path}", methods=["GET", "HEAD"])
 async def get_stream(track_id: str, request: Request):
-    """Проксируем аудио через бэкенд с поддержкой Range requests"""
+    """Проксируем аудио через бэкенд с конвертацией WebM → MP3"""
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
     
     import httpx
+    import asyncio
+    import tempfile
+    import os
+    
     client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60.0, connect=10.0, read=30.0))
+    
     try:
-        # Пробрасываем Range header от клиента для поддержки перемотки
+        # Для HEAD запроса — просто проверяем доступность
+        if request.method == "HEAD":
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "*/*",
+            }
+            req = client.build_request("HEAD", url, headers=headers)
+            resp = await client.send(req)
+            await resp.aclose()
+            await client.aclose()
+            
+            from fastapi.responses import Response
+            return Response(
+                status_code=200,
+                headers={
+                    "Content-Type": "audio/mpeg",
+                    "Accept-Ranges": "bytes",
+                }
+            )
+        
+        # Для GET запроса — скачиваем WebM и конвертируем в MP3
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "*/*",
         }
-        if "range" in request.headers:
-            headers["Range"] = request.headers["range"]
-        
-        # Для HEAD запроса используем тот же метод
-        method = "HEAD" if request.method == "HEAD" else "GET"
-        req = client.build_request(method, url, headers=headers)
-        resp = await client.send(req, stream=(method == "GET"))
+        req = client.build_request("GET", url, headers=headers)
+        resp = await client.send(req, stream=True)
         
         if resp.status_code not in [200, 206]:
             await resp.aclose()
             await client.aclose()
             raise HTTPException(502, f"Upstream returned {resp.status_code}")
         
-        # Получаем Content-Type от upstream
-        content_type = resp.headers.get("content-type", "audio/mpeg")
+        # Создаём временный файл для WebM
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as tmp_webm:
+            webm_path = tmp_webm.name
+            mp3_path = webm_path.replace('.webm', '.mp3')
+            
+            # Скачиваем WebM
+            async for chunk in resp.aiter_bytes(chunk_size=65536):
+                tmp_webm.write(chunk)
         
-        # Пробрасываем важные заголовки от upstream
-        proxy_headers = {
-            "Cache-Control": "public, max-age=3600",
-            "Accept-Ranges": "bytes",
-        }
-        if "content-length" in resp.headers:
-            proxy_headers["Content-Length"] = resp.headers["content-length"]
-        if "content-range" in resp.headers:
-            proxy_headers["Content-Range"] = resp.headers["content-range"]
+        await resp.aclose()
+        await client.aclose()
         
-        # Для HEAD запроса закрываем сразу
-        if method == "HEAD":
-            await resp.aclose()
-            await client.aclose()
-            from fastapi.responses import Response
-            return Response(status_code=resp.status_code, headers=proxy_headers, media_type=content_type)
-        
-        async def audio_generator():
-            try:
-                async for chunk in resp.aiter_bytes(chunk_size=32768):
-                    yield chunk
-            finally:
-                await resp.aclose()
-                await client.aclose()
-        
-        return StreamingResponse(
-            audio_generator(),
-            status_code=resp.status_code,
-            media_type=content_type,
-            headers=proxy_headers,
+        # Конвертируем WebM → MP3 через ffmpeg
+        process = await asyncio.create_subprocess_exec(
+            'ffmpeg',
+            '-i', webm_path,
+            '-vn',  # без видео
+            '-acodec', 'libmp3lame',
+            '-ab', '192k',
+            '-ar', '44100',
+            '-y',  # перезаписать выходной файл
+            mp3_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
+        
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            os.unlink(webm_path)
+            raise HTTPException(500, f"FFmpeg conversion failed: {stderr.decode()}")
+        
+        # Читаем конвертированный MP3
+        with open(mp3_path, 'rb') as f:
+            mp3_data = f.read()
+        
+        # Удаляем временные файлы
+        os.unlink(webm_path)
+        os.unlink(mp3_path)
+        
+        from fastapi.responses import Response
+        return Response(
+            content=mp3_data,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Length": str(len(mp3_data)),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=3600",
+            }
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
