@@ -188,7 +188,7 @@ async def search_tracks(q: str = Query(..., min_length=1), limit: int = Query(30
 
 
 # ─── Stream (proxy audio through backend) ───
-@app.get("/stream/{track_id:path}")
+@app.api_route("/stream/{track_id:path}", methods=["GET", "HEAD"])
 async def get_stream(track_id: str, request: Request):
     """Проксируем аудио через бэкенд с поддержкой Range requests"""
     url = await music.get_stream_url(track_id)
@@ -206,14 +206,17 @@ async def get_stream(track_id: str, request: Request):
         if "range" in request.headers:
             headers["Range"] = request.headers["range"]
         
-        req = client.build_request("GET", url, headers=headers)
-        resp = await client.send(req, stream=True)
+        # Для HEAD запроса используем тот же метод
+        method = "HEAD" if request.method == "HEAD" else "GET"
+        req = client.build_request(method, url, headers=headers)
+        resp = await client.send(req, stream=(method == "GET"))
         
         if resp.status_code not in [200, 206]:
             await resp.aclose()
             await client.aclose()
             raise HTTPException(502, f"Upstream returned {resp.status_code}")
         
+        # Получаем Content-Type от upstream
         content_type = resp.headers.get("content-type", "audio/mpeg")
         
         # Пробрасываем важные заголовки от upstream
@@ -225,6 +228,13 @@ async def get_stream(track_id: str, request: Request):
             proxy_headers["Content-Length"] = resp.headers["content-length"]
         if "content-range" in resp.headers:
             proxy_headers["Content-Range"] = resp.headers["content-range"]
+        
+        # Для HEAD запроса закрываем сразу
+        if method == "HEAD":
+            await resp.aclose()
+            await client.aclose()
+            from fastapi.responses import Response
+            return Response(status_code=resp.status_code, headers=proxy_headers, media_type=content_type)
         
         async def audio_generator():
             try:
