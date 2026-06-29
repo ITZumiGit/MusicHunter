@@ -228,6 +228,7 @@ async def get_stream(track_id: str, request: Request):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "*/*",
         }
+        # Игнорируем Range header от клиента — всегда загружаем полный файл для конвертации
         req = client.build_request("GET", url, headers=headers)
         resp = await client.send(req, stream=True)
         
