@@ -39,13 +39,13 @@
           class="action-btn like-btn"
           :class="{ liked: isLiked(track.id) }"
           @click.stop="emit('like', track)"
-          :title="isLiked(track.id) ? 'Убрать лайк' : 'Лайк'"
+          :title="isLiked(track.id) ? 'UnLike' : 'Like'"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" :fill="isLiked(track.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
         </button>
-        <button class="action-btn more-btn" @click.stop="openMenu(track, $event)" title="Ещё">
+        <button class="action-btn more-btn" @click.stop="openMenu(track, $event)" title="More">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="1" />
             <circle cx="19" cy="12" r="1" />
@@ -56,7 +56,7 @@
     </div>
 
     <!-- Context Menu Overlay -->
-    <div v-if="menuTrack" class="menu-overlay fade-enter-active" @click="closeMenu">
+    <div v-if="menuTrack" class="menu-overlay" @click="closeMenu">
       <div class="context-menu" @click.stop>
         <button class="menu-item" @click="downloadFromMenu">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -64,29 +64,29 @@
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          {{ downloadingTrack ? 'Загрузка...' : (isPendingDownloaded ? 'Сохранено' : 'Скачать') }}
+          {{ downloadingTrack ? 'Loading...' : (isPendingDownloaded ? 'Saved' : 'Download') }}
         </button>
         <button class="menu-item" @click="addToPlaylist" :disabled="!pendingTrack">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          В плейлист
+          To Playlist
         </button>
         <button class="menu-item" @click="likeFromMenu">
           <svg width="16" height="16" viewBox="0 0 24 24" :fill="isLiked(pendingTrack?.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
-          {{ isLiked(pendingTrack?.id) ? 'Убрать лайк' : 'Лайк' }}
+          {{ isLiked(pendingTrack?.id) ? 'UnLike' : 'Like' }}
         </button>
       </div>
     </div>
 
     <!-- Playlist Picker Modal -->
-    <div v-if="showPlaylistPicker" class="menu-overlay fade-enter-active" @click="closePlaylistPicker">
+    <div v-if="showPlaylistPicker" class="menu-overlay" @click="closePlaylistPicker">
       <div class="playlist-picker" @click.stop>
         <div class="picker-header">
-          <h3>В плейлист</h3>
+          <h3>To Playlist</h3>
           <button class="picker-close" @click="closePlaylistPicker">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -97,7 +97,7 @@
 
         <div class="picker-create-form">
           <div class="create-row">
-            <input v-model="newPlName" class="picker-input" placeholder="Новый плейлист..." @keyup.enter="createAndAdd" />
+            <input v-model="newPlName" class="picker-input" placeholder="New playlist..." @keyup.enter="createAndAdd" />
             <button class="picker-create-btn" @click="createAndAdd" :disabled="!newPlName.trim()">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -107,8 +107,8 @@
           </div>
         </div>
 
-        <div v-if="playlistsLoading" class="picker-loading">Загрузка...</div>
-        <div v-else-if="userPlaylists.length === 0" class="picker-empty">Создайте первый плейлист ☝️</div>
+        <div v-if="playlistsLoading" class="picker-loading">Loading...</div>
+        <div v-else-if="userPlaylists.length === 0" class="picker-empty">Create first playlist</div>
         <div v-else class="picker-list">
           <button v-for="pl in userPlaylists" :key="pl.id" class="picker-item" @click="addToExistingPlaylist(pl.id)">
             <div class="picker-pl-cover">
@@ -121,7 +121,7 @@
             </div>
             <div class="picker-pl-info">
               <div class="picker-pl-name">{{ pl.name }}</div>
-              <div class="picker-pl-meta">{{ pl.track_count }} треков</div>
+              <div class="picker-pl-meta">{{ pl.track_count }} tracks</div>
             </div>
             <div class="picker-add-icon">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -169,7 +169,7 @@ function isLiked(trackId: string | undefined): boolean {
   return props.likedIds?.has(trackId) ?? false
 }
 
-// ── Context menu ──
+// -- Context menu --
 const menuTrack = ref<Track | null>(null)
 const menuPosition = ref<{ top: string; left: string }>({ top: '0px', left: '0px' })
 const pendingTrack = ref<Track | null>(null)
@@ -179,7 +179,7 @@ function openMenu(track: Track, event: MouseEvent) {
   pendingTrack.value = track
   const x = Math.min(event.clientX, window.innerWidth - 200)
   const y = Math.min(event.clientY - 10, window.innerHeight - 140)
-  menuPosition.value = { top: `${y}px`, left: `${x}px` }
+  menuPosition.value = { top: y + 'px', left: x + 'px' }
 }
 
 function closeMenu() {
@@ -193,7 +193,7 @@ function likeFromMenu() {
   menuTrack.value = null
 }
 
-// ── Download ──
+// -- Download --
 const downloadingTrack = ref(false)
 const isPendingDownloaded = computed(() => {
   return pendingTrack.value ? downloads.isDownloaded(pendingTrack.value.id) : false
@@ -209,17 +209,17 @@ async function downloadFromMenu() {
   try {
     await downloads.downloadTrack(pendingTrack.value)
     statusType.value = 'success'
-    statusMsg.value = '✓ Сохранено'
+    statusMsg.value = 'Saved'
     setTimeout(() => { statusMsg.value = '' }, 1500)
   } catch {
     statusType.value = 'error'
-    statusMsg.value = 'Ошибка загрузки'
+    statusMsg.value = 'Download error'
   }
   downloadingTrack.value = false
   menuTrack.value = null
 }
 
-// ── Playlist picker ──
+// -- Playlist picker --
 const showPlaylistPicker = ref(false)
 const userPlaylists = ref<Playlist[]>([])
 const playlistsLoading = ref(false)
@@ -259,7 +259,7 @@ async function addToExistingPlaylist(playlistId: number) {
   try {
     await addTrackToPlaylist(player.tgUserId.value, playlistId, pendingTrack.value)
     statusType.value = 'success'
-    statusMsg.value = '✓ Добавлено!'
+    statusMsg.value = 'Added!'
     setTimeout(() => {
       showPlaylistPicker.value = false
       pendingTrack.value = null
@@ -267,7 +267,7 @@ async function addToExistingPlaylist(playlistId: number) {
     }, 1000)
   } catch {
     statusType.value = 'error'
-    statusMsg.value = 'Ошибка'
+    statusMsg.value = 'Error'
   }
 }
 
@@ -277,7 +277,7 @@ async function createAndAdd() {
     const pl = await createPlaylist(player.tgUserId.value, newPlName.value, '')
     await addTrackToPlaylist(player.tgUserId.value, pl.id, pendingTrack.value)
     statusType.value = 'success'
-    statusMsg.value = `✓ "${newPlName.value}" создан`
+    statusMsg.value = 'Created!'
     newPlName.value = ''
     await loadPlaylists()
     setTimeout(() => {
@@ -287,7 +287,7 @@ async function createAndAdd() {
     }, 1500)
   } catch {
     statusType.value = 'error'
-    statusMsg.value = 'Ошибка создания'
+    statusMsg.value = 'Create error'
   }
 }
 </script>
@@ -330,7 +330,6 @@ async function createAndAdd() {
   font-variant-numeric: tabular-nums;
 }
 
-/* Playing bars */
 .playing-bars {
   display: flex;
   gap: 2px;
@@ -467,7 +466,6 @@ async function createAndAdd() {
   }
 }
 
-/* ─── Context Menu ─── */
 .menu-overlay {
   position: fixed;
   inset: 0;
@@ -513,7 +511,6 @@ async function createAndAdd() {
   cursor: not-allowed;
 }
 
-/* ─── Playlist Picker ─── */
 .playlist-picker {
   background: var(--bg-secondary);
   border: 1px solid var(--border-glass);
@@ -687,7 +684,6 @@ async function createAndAdd() {
   color: var(--pink);
 }
 
-/* Transitions */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
