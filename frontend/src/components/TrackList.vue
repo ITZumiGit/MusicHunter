@@ -5,118 +5,136 @@
       :key="track.id"
       class="track-item"
       :class="{ active: isActive(track) }"
-      @click="$emit('play', track, index)"
+      @click="emit('play', track, index)"
+      @contextmenu.prevent="openMenu(track, $event)"
     >
-      <!-- Index / Playing indicator -->
       <div class="track-index">
-        <span v-if="!isActive(track)" class="index-num">{{ index + 1 }}</span>
-        <div v-else class="playing-bars">
-          <span :class="{ paused: !isPlaying }"></span>
-          <span :class="{ paused: !isPlaying }"></span>
-          <span :class="{ paused: !isPlaying }"></span>
-        </div>
+        <span v-if="isActive(track) && isPlaying" class="playing-bars">
+          <span></span><span></span><span></span>
+        </span>
+        <span v-else class="index-num">{{ index + 1 }}</span>
       </div>
-      
-      <!-- Cover -->
+
       <div class="track-cover">
         <img v-if="track.cover_url" :src="track.cover_url" :alt="track.title" loading="lazy" />
         <div v-else class="cover-placeholder">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
           </svg>
         </div>
       </div>
-      
-      <!-- Info -->
+
       <div class="track-info">
         <div class="track-title">{{ track.title }}</div>
         <div class="track-artist">{{ track.artist }}</div>
       </div>
-      
-      <!-- Duration -->
-      <div class="track-duration" v-if="track.duration_str">{{ track.duration_str }}</div>
 
-      <!-- Actions -->
+      <div class="track-duration">{{ track.duration_str }}</div>
+
       <div class="track-actions">
-        <button class="action-btn like-btn" :class="{ liked: isLiked(track.id) }" @click.stop="$emit('like', track)" title="Лайк">
-          <svg width="16" height="16" viewBox="0 0 24 24" :fill="isLiked(track.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        <button
+          class="action-btn like-btn"
+          :class="{ liked: isLiked(track.id) }"
+          @click.stop="emit('like', track)"
+          :title="isLiked(track.id) ? 'Убрать лайк' : 'Лайк'"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" :fill="isLiked(track.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
         </button>
         <button class="action-btn more-btn" @click.stop="openMenu(track, $event)" title="Ещё">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="19" cy="12" r="1" />
+            <circle cx="5" cy="12" r="1" />
           </svg>
         </button>
       </div>
     </div>
 
-    <!-- Context menu -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="menuTrack" class="menu-overlay" @click="closeMenu" @contextmenu.prevent="closeMenu">
-          <div class="context-menu" :style="menuPosition">
-            <button class="menu-item" @click="addToPlaylist">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-              </svg>
-              В плейлист
-            </button>
-            <button class="menu-item" @click="likeFromMenu">
-              <svg width="16" height="16" viewBox="0 0 24 24" :fill="isLiked(pendingTrack?.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-              </svg>
-              {{ isLiked(pendingTrack?.id) ? 'Убрать лайк' : 'Лайк' }}
-            </button>
-            <button class="menu-item" @click="downloadFromMenu" :disabled="isPendingDownloaded || downloadingTrack">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              {{ downloadingTrack ? 'Загрузка...' : (isPendingDownloaded ? 'Сохранено' : 'Скачать') }}
-            </button>
-          </div>
-        </div>
-      </Transition>
+    <!-- Context Menu Overlay -->
+    <div v-if="menuTrack" class="menu-overlay fade-enter-active" @click="closeMenu">
+      <div class="context-menu" @click.stop>
+        <button class="menu-item" @click="downloadFromMenu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          {{ downloadingTrack ? 'Загрузка...' : (isPendingDownloaded ? 'Сохранено' : 'Скачать') }}
+        </button>
+        <button class="menu-item" @click="addToPlaylist" :disabled="!pendingTrack">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          В плейлист
+        </button>
+        <button class="menu-item" @click="likeFromMenu">
+          <svg width="16" height="16" viewBox="0 0 24 24" :fill="isLiked(pendingTrack?.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+          {{ isLiked(pendingTrack?.id) ? 'Убрать лайк' : 'Лайк' }}
+        </button>
+      </div>
+    </div>
 
-      <!-- Playlist picker -->
-      <Transition name="fade">
-        <div v-if="showPlaylistPicker" class="menu-overlay" @click.self="closePlaylistPicker">
-          <div class="playlist-picker">
-            <div class="picker-header">
-              <h3>В плейлист</h3>
-              <button class="picker-close" @click="closePlaylistPicker">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div class="picker-create-form">
-              <div class="create-row">
-                <input v-model="newPlName" placeholder="Новый плейлист" class="picker-input" @keydown.enter="createAndAdd" />
-                <button class="picker-create-btn" @click="createAndAdd" :disabled="!newPlName.trim()">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </button>
-              </div>
-            </div>
-            <div v-if="playlistsLoading" class="picker-loading">Загрузка...</div>
-            <div v-else-if="userPlaylists.length" class="picker-list">
-              <button v-for="pl in userPlaylists" :key="pl.id" class="picker-item" @click="addToExistingPlaylist(pl.id)">
-                <div class="picker-pl-cover">
-                  <img v-if="pl.cover_url" :src="pl.cover_url" />
-                  <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
-                </div>
-                <div class="picker-pl-info">
-                  <div class="picker-pl-name">{{ pl.name }}</div>
-                  <div class="picker-pl-meta">{{ pl.track_count }} треков</div>
-                </div>
-                <svg class="picker-add-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
-            </div>
-            <div v-else class="picker-empty">Создайте первый плейлист ☝️</div>
-            <div v-if="statusMsg" class="picker-status" :class="statusType">{{ statusMsg }}</div>
+    <!-- Playlist Picker Modal -->
+    <div v-if="showPlaylistPicker" class="menu-overlay fade-enter-active" @click="closePlaylistPicker">
+      <div class="playlist-picker" @click.stop>
+        <div class="picker-header">
+          <h3>В плейлист</h3>
+          <button class="picker-close" @click="closePlaylistPicker">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="picker-create-form">
+          <div class="create-row">
+            <input v-model="newPlName" class="picker-input" placeholder="Новый плейлист..." @keyup.enter="createAndAdd" />
+            <button class="picker-create-btn" @click="createAndAdd" :disabled="!newPlName.trim()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
           </div>
         </div>
-      </Transition>
-    </Teleport>
+
+        <div v-if="playlistsLoading" class="picker-loading">Загрузка...</div>
+        <div v-else-if="userPlaylists.length === 0" class="picker-empty">Создайте первый плейлист ☝️</div>
+        <div v-else class="picker-list">
+          <button v-for="pl in userPlaylists" :key="pl.id" class="picker-item" @click="addToExistingPlaylist(pl.id)">
+            <div class="picker-pl-cover">
+              <img v-if="pl.cover_url" :src="pl.cover_url" :alt="pl.name" />
+              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            </div>
+            <div class="picker-pl-info">
+              <div class="picker-pl-name">{{ pl.name }}</div>
+              <div class="picker-pl-meta">{{ pl.track_count }} треков</div>
+            </div>
+            <div class="picker-add-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </div>
+          </button>
+        </div>
+
+        <div v-if="statusMsg" class="picker-status" :class="statusType">{{ statusMsg }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -131,7 +149,7 @@ const props = defineProps<{
   tracks: Track[]
   currentTrack: Track | null
   isPlaying: boolean
-  likedIds: Set<string>
+  likedIds?: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -148,7 +166,7 @@ function isActive(track: Track): boolean {
 
 function isLiked(trackId: string | undefined): boolean {
   if (!trackId) return false
-  return props.likedIds.has(trackId)
+  return props.likedIds?.has(trackId) ?? false
 }
 
 // ── Context menu ──
@@ -169,7 +187,9 @@ function closeMenu() {
 }
 
 function likeFromMenu() {
-  if (pendingTrack.value) emit('like', pendingTrack.value)
+  if (pendingTrack.value) {
+    emit('like', pendingTrack.value)
+  }
   menuTrack.value = null
 }
 
@@ -179,8 +199,12 @@ const isPendingDownloaded = computed(() => {
   return pendingTrack.value ? downloads.isDownloaded(pendingTrack.value.id) : false
 })
 
+const statusMsg = ref('')
+const statusType = ref<'success' | 'error'>('success')
+
 async function downloadFromMenu() {
   if (!pendingTrack.value || downloadingTrack.value || isPendingDownloaded.value) return
+
   downloadingTrack.value = true
   try {
     await downloads.downloadTrack(pendingTrack.value)
@@ -200,12 +224,11 @@ const showPlaylistPicker = ref(false)
 const userPlaylists = ref<Playlist[]>([])
 const playlistsLoading = ref(false)
 const newPlName = ref('')
-const statusMsg = ref('')
-const statusType = ref<'success' | 'error'>('success')
 
 async function addToPlaylist() {
   menuTrack.value = null
   if (!pendingTrack.value) return
+
   showPlaylistPicker.value = true
   newPlName.value = ''
   statusMsg.value = ''
@@ -218,7 +241,9 @@ async function loadPlaylists() {
   try {
     const data = await getPlaylists(player.tgUserId.value)
     userPlaylists.value = data.playlists
-  } catch { userPlaylists.value = [] }
+  } catch {
+    userPlaylists.value = []
+  }
   playlistsLoading.value = false
 }
 
@@ -235,7 +260,11 @@ async function addToExistingPlaylist(playlistId: number) {
     await addTrackToPlaylist(player.tgUserId.value, playlistId, pendingTrack.value)
     statusType.value = 'success'
     statusMsg.value = '✓ Добавлено!'
-    setTimeout(() => { showPlaylistPicker.value = false; pendingTrack.value = null; statusMsg.value = '' }, 1000)
+    setTimeout(() => {
+      showPlaylistPicker.value = false
+      pendingTrack.value = null
+      statusMsg.value = ''
+    }, 1000)
   } catch {
     statusType.value = 'error'
     statusMsg.value = 'Ошибка'
@@ -251,7 +280,11 @@ async function createAndAdd() {
     statusMsg.value = `✓ "${newPlName.value}" создан`
     newPlName.value = ''
     await loadPlaylists()
-    setTimeout(() => { showPlaylistPicker.value = false; pendingTrack.value = null; statusMsg.value = '' }, 1500)
+    setTimeout(() => {
+      showPlaylistPicker.value = false
+      pendingTrack.value = null
+      statusMsg.value = ''
+    }, 1500)
   } catch {
     statusType.value = 'error'
     statusMsg.value = 'Ошибка создания'
@@ -406,20 +439,32 @@ async function createAndAdd() {
   -webkit-tap-highlight-color: transparent;
 }
 
-.action-btn:active { transform: scale(0.85); }
-.action-btn:hover { color: var(--fg-primary); background: var(--bg-tertiary); }
+.action-btn:active {
+  transform: scale(0.85);
+}
 
-.like-btn.liked { color: var(--pink); }
+.action-btn:hover {
+  color: var(--fg-primary);
+  background: var(--bg-tertiary);
+}
+
+.like-btn.liked {
+  color: var(--pink);
+}
 
 .more-btn {
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-.track-item:hover .more-btn { opacity: 1; }
+.track-item:hover .more-btn {
+  opacity: 1;
+}
 
 @media (max-width: 767px) {
-  .more-btn { opacity: 1; }
+  .more-btn {
+    opacity: 1;
+  }
 }
 
 /* ─── Context Menu ─── */
@@ -459,8 +504,14 @@ async function createAndAdd() {
   transition: background 0.15s;
 }
 
-.menu-item:hover { background: var(--bg-tertiary); }
-.menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.menu-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ─── Playlist Picker ─── */
 .playlist-picker {
@@ -482,11 +533,28 @@ async function createAndAdd() {
   margin-bottom: 16px;
 }
 
-.picker-header h3 { font-size: 18px; font-weight: 700; color: var(--fg-primary); }
-.picker-close { background: none; border: none; color: var(--fg-muted); cursor: pointer; padding: 4px; }
+.picker-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg-primary);
+}
 
-.picker-create-form { margin-bottom: 16px; }
-.create-row { display: flex; gap: 8px; }
+.picker-close {
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.picker-create-form {
+  margin-bottom: 16px;
+}
+
+.create-row {
+  display: flex;
+  gap: 8px;
+}
 
 .picker-input {
   flex: 1;
@@ -500,7 +568,9 @@ async function createAndAdd() {
   transition: border-color 0.2s;
 }
 
-.picker-input:focus { border-color: var(--accent); }
+.picker-input:focus {
+  border-color: var(--accent);
+}
 
 .picker-create-btn {
   display: flex;
@@ -517,37 +587,114 @@ async function createAndAdd() {
   flex-shrink: 0;
 }
 
-.picker-create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.picker-create-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
-.picker-loading, .picker-empty { text-align: center; padding: 20px; color: var(--fg-muted); font-size: 14px; }
+.picker-loading,
+.picker-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--fg-muted);
+  font-size: 14px;
+}
 
-.picker-list { display: flex; flex-direction: column; gap: 2px; }
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 .picker-item {
-  display: flex; align-items: center; gap: 12px; padding: 10px;
-  background: none; border: none; color: var(--fg-primary);
-  cursor: pointer; border-radius: var(--radius); transition: background 0.15s; width: 100%; text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: none;
+  border: none;
+  color: var(--fg-primary);
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+  width: 100%;
+  text-align: left;
 }
 
-.picker-item:hover { background: var(--bg-tertiary); }
+.picker-item:hover {
+  background: var(--bg-tertiary);
+}
 
 .picker-pl-cover {
-  width: 38px; height: 38px; border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; background: var(--bg-tertiary); color: var(--fg-muted);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  color: var(--fg-muted);
 }
 
-.picker-pl-cover img { width: 100%; height: 100%; object-fit: cover; }
-.picker-pl-info { flex: 1; min-width: 0; }
+.picker-pl-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-.picker-pl-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.picker-pl-meta { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
-.picker-add-icon { color: var(--accent); flex-shrink: 0; }
+.picker-pl-info {
+  flex: 1;
+  min-width: 0;
+}
 
-.picker-status { text-align: center; padding: 10px; margin-top: 12px; border-radius: var(--radius); font-size: 14px; font-weight: 600; }
-.picker-status.success { background: rgba(45, 212, 191, 0.12); color: var(--teal); }
-.picker-status.error { background: rgba(244, 114, 182, 0.12); color: var(--pink); }
+.picker-pl-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker-pl-meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.picker-add-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.picker-status {
+  text-align: center;
+  padding: 10px;
+  margin-top: 12px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.picker-status.success {
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--teal);
+}
+
+.picker-status.error {
+  background: rgba(244, 114, 182, 0.12);
+  color: var(--pink);
+}
 
 /* Transitions */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 </style>
