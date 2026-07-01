@@ -301,7 +301,7 @@ function isLiked(trackId: string): boolean {
 }
 
 async function toggleTrackLike(track: Track) {
-    console.log('[Player] toggleTrackLike:', track.title, '| tgUserId:', tgUserId.value)
+    console.log('[Player] toggleTrackLike called for:', track.title, '| tgUserId:', tgUserId.value)
     if (!tgUserId.value) {
         console.warn('[Player] tgUserId not set, initializing with 12345...')
         await loadLikes(12345)
@@ -316,12 +316,15 @@ async function toggleTrackLike(track: Track) {
     }
     try {
         const result = await toggleLike(tgUserId.value, track)
-        console.log('[Player] toggleLike result:', result)
+        console.log('[Player] toggleLike API result:', result)
+        // Reassign entire Set for Vue reactivity (mutation .add/.delete may not trigger UI updates)
+        const newSet = new Set(likedIds.value)
         if (result.action === 'liked') {
-            likedIds.value.add(track.id)
+            newSet.add(track.id)
         } else {
-            likedIds.value.delete(track.id)
+            newSet.delete(track.id)
         }
+        likedIds.value = newSet
         console.log('[Player] likedIds now has', likedIds.value.size, 'items')
     } catch (e) {
         console.error('[Player] toggleTrackLike error:', e)
