@@ -1,5 +1,6 @@
 <template>
   <div class="track-list">
+    <p v-if="tracks.length === 0" style="color:yellow;padding:20px;">TRACKS EMPTY: {{ tracks }}</p>
     <div
       v-for="(track, index) in tracks"
       :key="track.id"
@@ -44,14 +45,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { usePlayer } from '../composables/usePlayer'
 import { useDownloads } from '../composables/useDownloads'
 import type { Track } from '../services/api'
 
+console.log('[TrackList] === COMPONENT SETUP START ===')
+
 const props = defineProps<{
   tracks: Track[]
 }>()
+
+console.log('[TrackList] props.tracks:', props.tracks?.length, 'type:', typeof props.tracks, Array.isArray(props.tracks))
 
 const player = usePlayer()
 const downloads = useDownloads()
@@ -63,7 +68,6 @@ const isLiked = player.isLiked
 const toggleTrackLike = player.toggleTrackLike
 const setQueue = player.setQueue
 
-const isDownloaded = downloads.isDownloaded
 const downloadTrackFn = downloads.downloadTrack
 
 async function onDownload(track: Track) {
@@ -75,9 +79,13 @@ async function onDownload(track: Track) {
 }
 
 function playTrack(track: Track, index: number) {
-  console.log('[TrackList] playTrack:', track.title, 'index:', index, 'total:', props.tracks.length)
+  console.log('[TrackList] playTrack:', track.title, 'index:', index)
   setQueue(props.tracks, index)
 }
+
+onMounted(() => {
+  console.log('[TrackList] MOUNTED, tracks count:', props.tracks.length)
+})
 </script>
 
 <style scoped>
@@ -204,18 +212,8 @@ function playTrack(track: Track, index: number) {
 }
 
 @media (max-width: 767px) {
-  .track-index {
-    width: 20px;
-    font-size: 12px;
-  }
-  .track-cover {
-    width: 38px;
-    height: 38px;
-  }
-  .like-btn,
-  .download-btn {
-    width: 30px;
-    height: 30px;
-  }
+  .track-index { width: 20px; font-size: 12px; }
+  .track-cover { width: 38px; height: 38px; }
+  .like-btn, .download-btn { width: 30px; height: 30px; }
 }
 </style>
