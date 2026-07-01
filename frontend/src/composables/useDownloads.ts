@@ -4,7 +4,7 @@
  */
 import { ref, computed } from 'vue'
 import type { Track } from '../services/api'
-import { getStreamUrl, downloadLocalTrack } from '../services/api'
+import { getStreamUrl, downloadLocalTrack, API_URL } from '../services/api'
 
 const DB_NAME = 'MusicHunterDB'
 const DB_VERSION = 1
