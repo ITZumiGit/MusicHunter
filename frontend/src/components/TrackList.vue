@@ -6,6 +6,8 @@
       class="track-item"
       :class="{ active: player.currentTrack?.id === track.id }"
       @click.stop="playTrack(track, index)"
+      @touchstart.stop
+      @touchend.stop
     >
       <div class="track-info">
         <img
@@ -28,6 +30,7 @@
           :class="{ liked: likedSet.has(track.id) }"
           @click.stop="handleLike(track)"
           @touchstart.stop
+          @touchend.stop
         >
           {{ likedSet.has(track.id) ? '❤️' : '🤍' }}
         </button>
@@ -38,6 +41,7 @@
           :disabled="downloading"
           @click.stop="handleDownload(track)"
           @touchstart.stop
+          @touchend.stop
         >
           <span v-if="downloads.isDownloaded(track.id)">✓</span>
           <span v-else-if="downloading">⏳</span>
@@ -68,32 +72,31 @@ const player = usePlayer()
 const downloads = useDownloads()
 const downloading = ref(false)
 
-// Safe computed set for liked tracks (handles undefined/null likedIds)
-const likedSet = computed(() => {
+// Safe computed - never crashes even if likedIds is undefined
+const likedSet = computed<Set<string>>(() => {
   try {
-    const ids = player.likedIds?.value
-    if (ids instanceof Set) return ids
-    return new Set<string>()
-  } catch {
-    return new Set<string>()
-  }
+    if (player.likedIds && player.likedIds.value instanceof Set) {
+      return player.likedIds.value
+    }
+  } catch (e) {}
+  return new Set<string>()
 })
 
 function playTrack(track: Track, index: number) {
-  console.log('[TrackList] playTrack:', track.title, 'at index', index)
+  console.log('[TrackList] playTrack:', track.title)
   player.setQueue(props.tracks, index)
-  // Navigate to player page
   router.push('/player')
 }
 
 async function handleLike(track: Track) {
-  console.log('[TrackList] handleLike:', track.title)
+  console.log('[TrackList] handleLike:', track.title, 'tgUserId:', player.tgUserId?.value)
+  if (!player.toggleTrackLike) {
+    console.error('[TrackList] toggleTrackLike not available!')
+    return
+  }
   try {
-    if (!player.toggleTrackLike) {
-      console.error('[TrackList] toggleTrackLike not available!')
-      return
-    }
     await player.toggleTrackLike(track)
+    console.log('[TrackList] handleLike done')
   } catch (e) {
     console.error('[TrackList] handleLike error:', e)
   }
@@ -105,7 +108,7 @@ async function handleDownload(track: Track) {
   downloading.value = true
   try {
     await downloads.downloadTrack(track)
-    console.log('[TrackList] Download complete:', track.title)
+    console.log('[TrackList] Download complete')
   } catch (e) {
     console.error('[TrackList] Download error:', e)
   } finally {
