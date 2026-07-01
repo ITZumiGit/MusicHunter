@@ -12,23 +12,21 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://musichunter.ru'
 export type RepeatMode = 'off' | 'all' | 'one'
 
 // ─── Singleton state (module-level) ─────────
-const currentTrack = ref<Track | null>(null)
+const currentTrack = ref(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const volume = ref(0.8)
-
-const queue = ref<Track[]>([])
+const queue = ref([])
 const queueIndex = ref(-1)
-
 const shuffleMode = ref(false)
-const repeatMode = ref<RepeatMode>('off')
-
-const likedIds = ref<Set<string>>(new Set())
-const tgUserId = ref<number>(0)
+const repeatMode = ref('off')
+const likedIds = ref>(new Set())
+const tgUserId = ref(0)
 
 let audio: HTMLAudioElement | null = null
-let historyTimer: ReturnType<typeof setTimeout> | null = null
+let historyTimer: ReturnType | null = null
+
 const downloads = useDownloads()
 
 // Computed
@@ -44,25 +42,35 @@ const isCurrentLiked = computed(() => {
 // ─── Internal ───────────────────────────────
 function initAudio() {
   if (audio) return
-
+  
   audio = new Audio()
+  audio.crossOrigin = 'anonymous' // ВАЖНО: для CORS
   audio.volume = volume.value
   audio.preload = 'auto'
-
+  
   audio.ontimeupdate = () => {
     currentTime.value = audio?.currentTime ?? 0
   }
-
+  
   audio.ondurationchange = () => {
     duration.value = audio?.duration ?? 0
   }
-
+  
   audio.onended = () => {
     handleTrackEnd()
   }
-
-  audio.onerror = () => {
+  
+  audio.onerror = (e) => {
+    console.error('[Player] Audio error:', e, 'Error code:', audio?.error?.code, 'Message:', audio?.error?.message)
     isPlaying.value = false
+  }
+  
+  audio.onstalled = () => {
+    console.warn('[Player] Audio stalled')
+  }
+  
+  audio.onwaiting = () => {
+    console.warn('[Player] Audio waiting')
   }
 }
 
@@ -81,8 +89,9 @@ function handleTrackEnd() {
 
 // ─── Public API ─────────────────────────────
 async function play(track: Track) {
+  console.log('[Player] Play track:', track.title, 'URL:', track.url)
+  
   initAudio()
-
   currentTrack.value = track
   isPlaying.value = true
 
@@ -90,12 +99,14 @@ async function play(track: Track) {
   let url: string | null = null
   if (downloads.isDownloaded(track.id)) {
     url = await downloads.getLocalUrl(track.id)
+    console.log('[Player] Using cached:', url)
   }
 
   // 2. Локальные файлы бота (local_*) — прямой URL
   if (!url && track.id.startsWith('local_')) {
     const fileId = track.id.slice(6)
     url = `${API_URL}/local/${fileId}`
+    console.log('[Player] Using local file:', url)
   }
 
   // 3. Если нет локально — стрим через бэкенд (прокси)
@@ -105,24 +116,50 @@ async function play(track: Track) {
       url = `${API_URL}/stream/${encodeURIComponent(track.id)}`
       track.url = url
     }
+    console.log('[Player] Using stream:', url)
   }
 
   if (url && audio) {
     audio.src = url
-    // Для стримов нужно дождаться canplay перед воспроизведением
-    const canPlayPromise = new Promise<void>((resolve) => {
-      if (audio!.readyState >= 3) resolve() // уже готов
-      else audio!.addEventListener('canplay', () => resolve(), { once: true })
-    })
+    console.log('[Player] Set audio.src:', url)
     
+    // Для стримов нужно дождаться canplay перед воспроизведением
+    const canPlayPromise = new Promise((resolve, reject) => {
+      if (audio!.readyState >= 3) {
+        console.log('[Player] Audio already ready')
+        resolve(true)
+      } else {
+        console.log('[Player] Waiting for canplay...')
+        audio!.addEventListener('canplay', () => {
+          console.log('[Player] canplay event fired')
+          resolve(true)
+        }, { once: true })
+        
+        audio!.addEventListener('error', (e) => {
+          console.error('[Player] Error while waiting for canplay:', e)
+          reject(e)
+        }, { once: true })
+        
+        // Таймаут 15 секунд
+        setTimeout(() => {
+          console.error('[Player] Timeout waiting for canplay')
+          reject(new Error('Timeout waiting for canplay'))
+        }, 15000)
+      }
+    })
+
     try {
       await canPlayPromise
+      console.log('[Player] Calling audio.play()')
       await audio.play()
+      console.log('[Player] Playing successfully')
       isPlaying.value = true
-    } catch {
+    } catch (err) {
+      console.error('[Player] Play failed:', err)
       isPlaying.value = false
     }
   } else {
+    console.error('[Player] No URL or audio element')
     isPlaying.value = false
   }
 
@@ -131,14 +168,15 @@ async function play(track: Track) {
 
 function togglePlay() {
   if (!audio || !currentTrack.value) return
-
+  
   if (isPlaying.value) {
     audio.pause()
     isPlaying.value = false
   } else {
     audio.play().then(() => {
       isPlaying.value = true
-    }).catch(() => {
+    }).catch((err) => {
+      console.error('[Player] togglePlay failed:', err)
       isPlaying.value = false
     })
   }
@@ -155,7 +193,6 @@ function seek(percent: number) {
     // Браузер использует Range requests для перехода к нужной позиции
     const estimatedDuration = 300 // fallback 5 минут
     const targetTime = (percent / 100) * estimatedDuration
-    
     try {
       audio.currentTime = targetTime
       currentTime.value = targetTime
@@ -237,6 +274,7 @@ function stop() {
   isPlaying.value = false
   currentTime.value = 0
   duration.value = 0
+
   if (historyTimer) {
     clearTimeout(historyTimer)
     historyTimer = null
@@ -265,7 +303,7 @@ async function loadLikes(tgId: number) {
   tgUserId.value = tgId
   try {
     const data = await getLikes(tgId)
-    likedIds.value = new Set(data.tracks.map(t => t.id))
+    likedIds.value = new Set(data.tracks.map((t: Track) => t.id))
   } catch {
     // Silent fail
   }
