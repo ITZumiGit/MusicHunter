@@ -4,8 +4,9 @@
       v-for="(track, index) in tracks"
       :key="track.id"
       class="track-item"
-      :class="{ playing: currentTrack?.id === track.id && isPlaying }"
-      @click="playTrack(track, index)"
+      :class="{ playing: isCurrentPlaying(track.id) }"
+      @click.stop="playTrack(track, index)"
+      @touchstart.stop=""
     >
       <div class="track-index">{{ index + 1 }}</div>
       <div class="track-cover">
@@ -24,14 +25,14 @@
       <div class="track-actions">
         <button
           class="like-btn"
-          :class="{ liked: checkLiked(track.id) }"
-          @click.stop="toggleLike(track)"
+          :class="{ liked: safeIsLiked(track.id) }"
+          @click.stop.prevent="handleLike(track)"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
         </button>
-        <button class="download-btn" @click.stop="onDownload(track)">
+        <button class="download-btn" @click.stop.prevent="handleDownload(track)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
@@ -49,49 +50,87 @@ import { usePlayer } from '../composables/usePlayer'
 import { useDownloads } from '../composables/useDownloads'
 import type { Track } from '../services/api'
 
-console.log('[TrackList] === SETUP START ===')
-
 const props = defineProps<{
   tracks: Track[]
 }>()
 
-console.log('[TrackList] tracks:', props.tracks?.length, Array.isArray(props.tracks))
-
 const player = usePlayer()
 const downloads = useDownloads()
 
-console.log('[TrackList] player.likedIds.value:', player.likedIds?.value, 'tgUserId:', player.tgUserId?.value)
-
-const currentTrack = computed(() => player.currentTrack.value)
-const isPlaying = computed(() => player.isPlaying.value)
-
-function checkLiked(trackId: string): boolean {
-  const ids = player.likedIds?.value
-  if (!ids) return false
-  return ids.has(trackId)
-}
-
-async function toggleLike(track: Track) {
-  console.log('[TrackList] toggleLike:', track.title)
-  await player.toggleTrackLike(track)
-}
-
-async function onDownload(track: Track) {
+// Safe access to liked IDs — avoids "Cannot read properties of undefined" errors
+const likedSet = computed<Set<string>>(() => {
   try {
-    await downloads.downloadTrack(track)
-    console.log('[TrackList] downloaded:', track.title)
+    const raw = player.likedIds
+    if (raw && raw.value && raw.value instanceof Set) {
+      return raw.value
+    }
+  } catch (e) {
+    console.warn('[TrackList] likedSet error:', e)
+  }
+  return new Set<string>()
+})
+
+const currentTrackId = computed(() => {
+  try {
+    return player.currentTrack?.value?.id ?? null
+  } catch {
+    return null
+  }
+})
+
+const playing = computed(() => {
+  try {
+    return player.isPlaying?.value ?? false
+  } catch {
+    return false
+  }
+})
+
+function isCurrentPlaying(trackId: string): boolean {
+  return currentTrackId.value === trackId && playing.value
+}
+
+function safeIsLiked(trackId: string): boolean {
+  try {
+    return likedSet.value.has(trackId)
+  } catch {
+    return false
+  }
+}
+
+async function handleLike(track: Track) {
+  try {
+    console.log('[TrackList] Like:', track.title, 'tgUserId:', player.tgUserId?.value)
+    if (player.toggleTrackLike) {
+      await player.toggleTrackLike(track)
+    }
+  } catch (e) {
+    console.error('[TrackList] Like error:', e)
+  }
+}
+
+async function handleDownload(track: Track) {
+  try {
+    console.log('[TrackList] Download:', track.title)
+    if (downloads.downloadTrack) {
+      await downloads.downloadTrack(track)
+    }
   } catch (e) {
     console.error('[TrackList] Download error:', e)
   }
 }
 
 function playTrack(track: Track, index: number) {
-  console.log('[TrackList] playTrack:', track.title, index)
-  player.setQueue(props.tracks, index)
+  console.log('[TrackList] Play:', track.title, 'index:', index, 'total:', props.tracks.length)
+  try {
+    player.setQueue(props.tracks, index)
+  } catch (e) {
+    console.error('[TrackList] Play error:', e)
+  }
 }
 
 onMounted(() => {
-  console.log('[TrackList] MOUNTED, tracks:', props.tracks.length)
+  console.log('[TrackList] MOUNTED OK, tracks:', props.tracks.length, 'likedSet size:', likedSet.value.size)
 })
 </script>
 
