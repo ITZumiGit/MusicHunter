@@ -315,9 +315,10 @@ async function toggleTrackLike(track: Track) {
         likedIds.value = new Set<string>()
     }
     try {
+        console.log('[Player] Calling toggleLike API for:', track.id)
         const result = await toggleLike(tgUserId.value, track)
         console.log('[Player] toggleLike API result:', result)
-        // Reassign entire Set for Vue reactivity (mutation .add/.delete may not trigger UI updates)
+        // Reassign entire Set for Vue reactivity
         const newSet = new Set(likedIds.value)
         if (result.action === 'liked') {
             newSet.add(track.id)
