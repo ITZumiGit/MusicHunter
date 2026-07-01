@@ -3,7 +3,7 @@
  * Поиск, лайки, плейлисты, история
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://musichunter.ru'
+export const API_URL = import.meta.env.VITE_API_URL || 'https://musichunter.ru'
 console.log('[MusicHunter] API_URL:', API_URL)
 
 export interface Track {
