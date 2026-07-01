@@ -1,6 +1,5 @@
 <template>
   <div class="track-list">
-    <p v-if="tracks.length === 0" style="color:yellow;padding:20px;">TRACKS EMPTY: {{ tracks }}</p>
     <div
       v-for="(track, index) in tracks"
       :key="track.id"
@@ -25,8 +24,8 @@
       <div class="track-actions">
         <button
           class="like-btn"
-          :class="{ liked: isLiked(track.id) }"
-          @click.stop="toggleTrackLike(track)"
+          :class="{ liked: checkLiked(track.id) }"
+          @click.stop="toggleLike(track)"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -50,41 +49,49 @@ import { usePlayer } from '../composables/usePlayer'
 import { useDownloads } from '../composables/useDownloads'
 import type { Track } from '../services/api'
 
-console.log('[TrackList] === COMPONENT SETUP START ===')
+console.log('[TrackList] === SETUP START ===')
 
 const props = defineProps<{
   tracks: Track[]
 }>()
 
-console.log('[TrackList] props.tracks:', props.tracks?.length, 'type:', typeof props.tracks, Array.isArray(props.tracks))
+console.log('[TrackList] tracks:', props.tracks?.length, Array.isArray(props.tracks))
 
 const player = usePlayer()
 const downloads = useDownloads()
 
+console.log('[TrackList] player.likedIds.value:', player.likedIds?.value, 'tgUserId:', player.tgUserId?.value)
+
 const currentTrack = computed(() => player.currentTrack.value)
 const isPlaying = computed(() => player.isPlaying.value)
 
-const isLiked = player.isLiked
-const toggleTrackLike = player.toggleTrackLike
-const setQueue = player.setQueue
+function checkLiked(trackId: string): boolean {
+  const ids = player.likedIds?.value
+  if (!ids) return false
+  return ids.has(trackId)
+}
 
-const downloadTrackFn = downloads.downloadTrack
+async function toggleLike(track: Track) {
+  console.log('[TrackList] toggleLike:', track.title)
+  await player.toggleTrackLike(track)
+}
 
 async function onDownload(track: Track) {
   try {
-    await downloadTrackFn(track)
+    await downloads.downloadTrack(track)
+    console.log('[TrackList] downloaded:', track.title)
   } catch (e) {
     console.error('[TrackList] Download error:', e)
   }
 }
 
 function playTrack(track: Track, index: number) {
-  console.log('[TrackList] playTrack:', track.title, 'index:', index)
-  setQueue(props.tracks, index)
+  console.log('[TrackList] playTrack:', track.title, index)
+  player.setQueue(props.tracks, index)
 }
 
 onMounted(() => {
-  console.log('[TrackList] MOUNTED, tracks count:', props.tracks.length)
+  console.log('[TrackList] MOUNTED, tracks:', props.tracks.length)
 })
 </script>
 
