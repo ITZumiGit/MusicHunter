@@ -31,7 +31,7 @@
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
         </button>
-        <button class="download-btn" @click.stop="downloadTrack(track)">
+        <button class="download-btn" @click.stop="onDownload(track)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
@@ -44,6 +44,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { usePlayer } from '../composables/usePlayer'
 import { useDownloads } from '../composables/useDownloads'
 import type { Track } from '../services/api'
@@ -52,10 +53,29 @@ const props = defineProps<{
   tracks: Track[]
 }>()
 
-const { currentTrack, isPlaying, setQueue, isLiked, toggleTrackLike } = usePlayer()
-const { downloadTrack } = useDownloads()
+const player = usePlayer()
+const downloads = useDownloads()
+
+const currentTrack = computed(() => player.currentTrack.value)
+const isPlaying = computed(() => player.isPlaying.value)
+
+const isLiked = player.isLiked
+const toggleTrackLike = player.toggleTrackLike
+const setQueue = player.setQueue
+
+const isDownloaded = downloads.isDownloaded
+const downloadTrackFn = downloads.downloadTrack
+
+async function onDownload(track: Track) {
+  try {
+    await downloadTrackFn(track)
+  } catch (e) {
+    console.error('[TrackList] Download error:', e)
+  }
+}
 
 function playTrack(track: Track, index: number) {
+  console.log('[TrackList] playTrack:', track.title, 'index:', index, 'total:', props.tracks.length)
   setQueue(props.tracks, index)
 }
 </script>
@@ -78,22 +98,22 @@ function playTrack(track: Track, index: number) {
 }
 
 .track-item:hover {
-  background: var(--bg-tertiary);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .track-item.playing {
-  background: var(--bg-tertiary);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .track-item.playing .track-title {
-  color: var(--accent);
+  color: #a78bfa;
 }
 
 .track-index {
   width: 24px;
   text-align: center;
   font-size: 13px;
-  color: var(--fg-muted);
+  color: rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
 }
 
@@ -103,7 +123,7 @@ function playTrack(track: Track, index: number) {
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--bg-tertiary);
+  background: rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -116,7 +136,7 @@ function playTrack(track: Track, index: number) {
 }
 
 .cover-placeholder {
-  color: var(--fg-muted);
+  color: rgba(255, 255, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -131,7 +151,7 @@ function playTrack(track: Track, index: number) {
 .track-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--fg-primary);
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -139,7 +159,7 @@ function playTrack(track: Track, index: number) {
 
 .track-artist {
   font-size: 12px;
-  color: var(--fg-muted);
+  color: rgba(255, 255, 255, 0.5);
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -148,7 +168,7 @@ function playTrack(track: Track, index: number) {
 
 .track-actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -159,27 +179,28 @@ function playTrack(track: Track, index: number) {
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--fg-muted);
+  color: rgba(255, 255, 255, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   transition: all 0.2s ease;
+  padding: 0;
 }
 
 .like-btn:hover,
 .download-btn:hover {
-  background: var(--bg-secondary);
-  color: var(--fg-secondary);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .like-btn.liked {
-  color: var(--pink);
+  color: #f472b6;
 }
 
 .like-btn.liked svg {
-  fill: var(--pink);
-  stroke: var(--pink);
+  fill: #f472b6;
+  stroke: #f472b6;
 }
 
 @media (max-width: 767px) {
