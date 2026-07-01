@@ -8,7 +8,7 @@
       @click.stop="playTrack(track, index)"
       @touchstart.stop=""
       @click.stop.prevent=""
-      @touchmove.stop=""
+      =""
     >
       <div class="track-index">{{ index + 1 }}</div>
       <div class="track-cover">
