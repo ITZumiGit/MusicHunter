@@ -89,81 +89,52 @@ function handleTrackEnd() {
 
 // ─── Public API ─────────────────────────────
 async function play(track: Track) {
-  console.log('[Player] Play track:', track.title, 'URL:', track.url)
-  
-  initAudio()
-  currentTrack.value = track
-  isPlaying.value = true
+    console.log('[Player] play() called for:', track?.title)
+    initAudio()
+    currentTrack.value = track
+    isPlaying.value = true
 
-  // 1. Проверяем локальный кэш (IndexedDB) — оффлайн воспроизведение
-  let url: string | null = null
-  if (downloads.isDownloaded(track.id)) {
-    url = await downloads.getLocalUrl(track.id)
-    console.log('[Player] Using cached:', url)
-  }
-
-  // 2. Локальные файлы бота (local_*) — прямой URL
-  if (!url && track.id.startsWith('local_')) {
-    const fileId = track.id.slice(6)
-    url = `${API_URL}/local/${fileId}`
-    console.log('[Player] Using local file:', url)
-  }
-
-  // 3. Если нет локально — стрим через бэкенд (прокси)
-  if (!url) {
-    url = track.url
+    let url: string | null = null
+    if (downloads.isDownloaded(track.id)) {
+        url = await downloads.getLocalUrl(track.id)
+        console.log('[Player] Using cached:', url)
+    }
+    if (!url && track.id.startsWith('local_')) {
+        const fileId = track.id.slice(6)
+        url = API_URL + '/local/' + fileId
+        console.log('[Player] Using local file:', url)
+    }
     if (!url) {
-      url = `${API_URL}/stream/${encodeURIComponent(track.id)}`
-      track.url = url
+        url = track.url
+        if (!url) {
+            url = API_URL + '/stream/' + encodeURIComponent(track.id)
+            track.url = url
+        }
+        console.log('[Player] Using stream:', url)
     }
-    console.log('[Player] Using stream:', url)
-  }
 
-  if (url && audio) {
-    audio.src = url
-    console.log('[Player] Set audio.src:', url)
-    
-    // Для стримов нужно дождаться canplay перед воспроизведением
-    const canPlayPromise = new Promise((resolve, reject) => {
-      if (audio!.readyState >= 3) {
-        console.log('[Player] Audio already ready')
-        resolve(true)
-      } else {
-        console.log('[Player] Waiting for canplay...')
-        audio!.addEventListener('canplay', () => {
-          console.log('[Player] canplay event fired')
-          resolve(true)
-        }, { once: true })
-        
-        audio!.addEventListener('error', (e) => {
-          console.error('[Player] Error while waiting for canplay:', e)
-          reject(e)
-        }, { once: true })
-        
-        // Таймаут 15 секунд
-        setTimeout(() => {
-          console.error('[Player] Timeout waiting for canplay')
-          reject(new Error('Timeout waiting for canplay'))
-        }, 15000)
-      }
-    })
-
-    try {
-      await canPlayPromise
-      console.log('[Player] Calling audio.play()')
-      await audio.play()
-      console.log('[Player] Playing successfully')
-      isPlaying.value = true
-    } catch (err) {
-      console.error('[Player] Play failed:', err)
-      isPlaying.value = false
+    if (url && audio) {
+        audio.src = url
+        console.log('[Player] Set audio.src:', url)
+        try {
+            await audio.play()
+            console.log('[Player] Playing immediately!')
+            isPlaying.value = true
+        } catch (e: any) {
+            console.warn('[Player] Immediate play failed, retrying on canplay:', e.message)
+            const onReady = () => {
+                audio!.play()
+                    .then(() => { console.log('[Player] Playing after canplay'); isPlaying.value = true })
+                    .catch(err => { console.error('[Player] play error:', err); isPlaying.value = false })
+                audio!.removeEventListener('canplay', onReady)
+            }
+            audio!.addEventListener('canplay', onReady)
+        }
+    } else {
+        console.error('[Player] No URL or audio element')
+        isPlaying.value = false
     }
-  } else {
-    console.error('[Player] No URL or audio element')
-    isPlaying.value = false
-  }
-
-  scheduleHistory(track)
+    scheduleHistory(track)
 }
 
 function togglePlay() {
@@ -300,7 +271,9 @@ function formatTime(s: number): string {
 
 // Likes
 async function loadLikes(tgId: number) {
+  console.log('[Player] loadLikes called, tgId:', tgId)
   tgUserId.value = tgId
+  console.log('[Player] tgUserId set to:', tgUserId.value)
   try {
     const data = await getLikes(tgId)
     likedIds.value = new Set(data.tracks.map((t: Track) => t.id))
@@ -328,17 +301,31 @@ function isLiked(trackId: string): boolean {
 }
 
 async function toggleTrackLike(track: Track) {
-  if (!tgUserId.value) return
-  try {
-    const result = await toggleLike(tgUserId.value, track)
-    if (result.action === 'liked') {
-      likedIds.value.add(track.id)
-    } else {
-      likedIds.value.delete(track.id)
+    console.log('[Player] toggleTrackLike:', track.title, '| tgUserId:', tgUserId.value)
+    if (!tgUserId.value) {
+        console.warn('[Player] tgUserId not set, initializing with 12345...')
+        await loadLikes(12345)
+        if (!tgUserId.value) {
+            console.error('[Player] Still no tgUserId!')
+            return
+        }
     }
-  } catch {
-    // Silent fail
-  }
+    if (!likedIds.value) {
+        console.warn('[Player] likedIds is falsy, reinitializing...')
+        likedIds.value = new Set<string>()
+    }
+    try {
+        const result = await toggleLike(tgUserId.value, track)
+        console.log('[Player] toggleLike result:', result)
+        if (result.action === 'liked') {
+            likedIds.value.add(track.id)
+        } else {
+            likedIds.value.delete(track.id)
+        }
+        console.log('[Player] likedIds now has', likedIds.value.size, 'items')
+    } catch (e) {
+        console.error('[Player] toggleTrackLike error:', e)
+    }
 }
 
 // Get audio element reference for visualizer
