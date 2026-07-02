@@ -89,82 +89,68 @@ function handleTrackEnd() {
 
 // ─── Public API ─────────────────────────────
 async function play(track: Track) {
-    console.log('[Player] play() called for:', track?.title)
+    console.log('[Player] play():', track?.title)
     initAudio()
     currentTrack.value = track
     isPlaying.value = true
     
     let url: string | null = null
-    
-    // 1. Check local cache (IndexedDB)
     if (downloads.isDownloaded(track.id)) {
         url = await downloads.getLocalUrl(track.id)
-        console.log('[Player] Using cached:', url)
+        console.log('[Player] Cached:', url)
     }
-    
-    // 2. Local files (local_*)
     if (!url && track.id.startsWith('local_')) {
-        const fileId = track.id.slice(6)
-        url = API_URL + '/local/' + fileId
-        console.log('[Player] Using local file:', url)
+        url = API_URL + '/local/' + track.id.slice(6)
     }
-    
-    // 3. Stream through backend proxy
     if (!url) {
-        url = track.url
-        if (!url) {
-            url = API_URL + '/stream/' + encodeURIComponent(track.id)
-            track.url = url
-        }
-        console.log('[Player] Using stream:', url)
+        url = track.url || (API_URL + '/stream/' + encodeURIComponent(track.id))
+        track.url = url
+        console.log('[Player] Stream:', url)
     }
     
     if (url && audio) {
-        // Force reload audio element to avoid stale src
+        // Clear previous src to avoid stale state
         audio.src = ''
         audio.src = url
         audio.preload = 'auto'
-        console.log('[Player] Set audio.src:', url)
+        console.log('[Player] src set:', url)
         
-        // Add error handler for this specific load
-        audio.onerror = (e) => {
-            console.error('[Player] Audio error event:', audio.error)
-            // Clear src and retry once
-            audio!.src = ''
+        // Error recovery
+        const onError = () => {
+            console.error('[Player] Audio error:', audio?.error)
+            audio!.removeEventListener('error', onError)
+            // Retry once after short delay
             setTimeout(() => {
                 if (audio) {
                     audio.src = url!
-                    console.log('[Player] Retrying with src:', url)
-                    audio.play().catch(err => console.error('[Player] Retry play failed:', err))
+                    audio.play().catch(e => console.error('[Player] Retry failed:', e))
                 }
-            }, 500)
+            }, 1000)
         }
+        audio.addEventListener('error', onError, { once: true })
         
         try {
             await audio.play()
-            console.log('[Player] Playing immediately!')
+            console.log('[Player] Playing!')
             isPlaying.value = true
         } catch (e: any) {
-            console.warn('[Player] Immediate play failed, waiting for canplay:', e.message)
+            console.warn('[Player] Play failed, waiting canplay:', e.message)
             const onReady = () => {
-                audio!.play()
-                    .then(() => {
-                        console.log('[Player] Playing after canplay')
-                        isPlaying.value = true
-                    })
-                    .catch(err => {
-                        console.error('[Player] canplay play failed:', err)
-                        isPlaying.value = false
-                    })
+                audio!.play().then(() => {
+                    console.log('[Player] Playing after canplay')
+                    isPlaying.value = true
+                }).catch(err => {
+                    console.error('[Player] canplay failed:', err)
+                    isPlaying.value = false
+                })
                 audio!.removeEventListener('canplay', onReady)
             }
-            audio.addEventListener('canplay', onReady)
+            audio.addEventListener('canplay', onReady, { once: true })
         }
     } else {
-        console.error('[Player] No URL or audio element! url=', url, 'audio=', !!audio)
+        console.error('[Player] No URL/audio!')
         isPlaying.value = false
     }
-    
     scheduleHistory(track)
 }
 
@@ -302,15 +288,27 @@ function formatTime(s: number): string {
 
 // Likes
 async function loadLikes(tgId: number) {
-  console.log('[Player] loadLikes called, tgId:', tgId)
-  tgUserId.value = tgId
-  console.log('[Player] tgUserId set to:', tgUserId.value)
-  try {
-    const data = await getLikes(tgId)
-    likedIds.value = new Set(data.tracks.map((t: Track) => t.id))
-  } catch {
-    // Silent fail
-  }
+    console.log('[Player] loadLikes called, tgId:', tgId)
+    tgUserId.value = tgId
+    try {
+        const result = await getLikes(tgId)
+        console.log('[Player] getLikes returned', result.count, 'tracks')
+        // Always set to a valid Set, never undefined
+        const ids = new Set<string>()
+        if (result.tracks && Array.isArray(result.tracks)) {
+            for (const t of result.tracks) {
+                ids.add(t.track_id)
+            }
+        }
+        likedIds.value = ids
+        console.log('[Player] likedIds has', likedIds.value.size, 'items')
+    } catch (e) {
+        console.error('[Player] loadLikes error:', e)
+        // Ensure likedIds is always a valid Set
+        if (!likedIds.value) {
+            likedIds.value = new Set<string>()
+        }
+    }
 }
 
 async function likeCurrent() {
@@ -332,17 +330,15 @@ function isLiked(trackId: string): boolean {
 }
 
 async function toggleTrackLike(track: Track) {
-    console.log('[Player] toggleTrackLike called:', track.title, '| tgUserId:', tgUserId.value)
+    console.log('[Player] toggleTrackLike:', track.title, '| tgUserId:', tgUserId.value)
     if (!tgUserId.value) {
-        console.warn('[Player] tgUserId not set, initializing with 12345...')
         await loadLikes(12345)
     }
-    if (!likedIds.value) {
-        console.warn('[Player] likedIds is undefined, reinitializing...')
+    // Ensure likedIds is always a valid Set
+    if (!likedIds.value || !(likedIds.value instanceof Set)) {
         likedIds.value = new Set<string>()
     }
     try {
-        console.log('[Player] Calling toggleLike API...')
         const result = await toggleLike(tgUserId.value, track)
         console.log('[Player] API result:', result)
         const newSet = new Set(likedIds.value)
@@ -352,7 +348,7 @@ async function toggleTrackLike(track: Track) {
             newSet.delete(track.id)
         }
         likedIds.value = newSet
-        console.log('[Player] likedIds:', likedIds.value.size, 'items')
+        console.log('[Player] likedIds:', likedIds.value.size)
     } catch (e) {
         console.error('[Player] toggleTrackLike error:', e)
     }
