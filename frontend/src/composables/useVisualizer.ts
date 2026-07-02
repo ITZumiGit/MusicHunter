@@ -33,6 +33,9 @@ export function useVisualizer() {
     ctx = canvas.getContext('2d')
     currentAudioElement = audioElement
 
+    // Remember if audio was playing before we hijack its output
+    const wasPlaying = !audioElement.paused
+
     try {
       audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
       analyser = audioContext.createAnalyser()
@@ -43,14 +46,24 @@ export function useVisualizer() {
       source.connect(analyser)
       analyser.connect(audioContext.destination)
 
-      // CRITICAL: resume() иначе Chrome держит AudioContext suspended = нет звука!
-      audioContext.resume().catch(() => {})
+      // CRITICAL: resume() — Chrome держит AudioContext suspended, без resume нет звука
+      audioContext.resume().then(() => {
+        // After AudioContext is resumed, if audio was playing before, restart it
+        // because createMediaElementSource may have interrupted playback
+        if (wasPlaying && audioElement.paused) {
+          audioElement.play().catch(() => {})
+        }
+      }).catch(() => {})
 
       isActive.value = true
       startDrawing()
     } catch (e) {
       console.warn('[Visualizer] Init failed:', e)
       isActive.value = false
+      // If we broke the audio routing, at least try to keep it playing
+      if (wasPlaying && audioElement.paused) {
+        audioElement.play().catch(() => {})
+      }
     }
   }
 
