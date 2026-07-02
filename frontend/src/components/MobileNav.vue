@@ -69,6 +69,10 @@ function onTouchStart(e: TouchEvent) {
 }
 
 function onTouchEnd(e: TouchEvent) {
+    // Don't swipe-navigate when touching interactive elements
+    const target = e.target as HTMLElement
+    if (target.closest('.track-item, .track-btn, button, a, [role="button"]')) return
+
     // Guard: don't navigate if touching interactive elements
     const target = e.target as HTMLElement
     if (target.closest('.track-item, .track-btn, button, a, [role="button"]')) return

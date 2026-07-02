@@ -5,10 +5,9 @@
       :key="track.id"
       class="track-item"
       :class="{ active: player.currentTrack?.id === track.id }"
-      @click.stop="playTrack(track, index)"
+      @click="playTrack(track, index)"
       @touchstart.stop
       @touchend.stop
-      @touchmove.stop
     >
       <div class="track-info">
         <img
@@ -27,12 +26,11 @@
       <div class="track-actions">
         <button
           class="track-btn like-btn"
-          :class="{ liked: isLiked(track.id) }"
+          :class="{ liked: player.isLiked(track.id) }"
           @click.stop="handleLike(track)"
           @touchstart.stop
-          @touchend.stop
         >
-          {{ isLiked(track.id) ? '\u2764\ufe0f' : '\ud83e\udd0d' }}
+          {{ player.isLiked(track.id) ? '\u2764\ufe0f' : '\ud83e\udd0d' }}
         </button>
         <button
           class="track-btn download-btn"
@@ -40,7 +38,6 @@
           :disabled="downloading"
           @click.stop="handleDownload(track)"
           @touchstart.stop
-          @touchend.stop
         >
           <span v-if="downloads.isDownloaded(track.id)">&#10003;</span>
           <span v-else-if="downloading">&#9203;</span>
@@ -67,12 +64,6 @@ const player = usePlayer()
 const downloads = useDownloads()
 const downloading = ref(false)
 
-function isLiked(id: string): boolean {
-  try {
-    return player.likedIds?.value instanceof Set && player.likedIds.value.has(id)
-  } catch { return false }
-}
-
 function playTrack(track: Track, index: number) {
   console.log('[TrackList] playTrack:', track.title)
   player.setQueue(props.tracks, index)
@@ -81,15 +72,14 @@ function playTrack(track: Track, index: number) {
 
 async function handleLike(track: Track) {
   console.log('[TrackList] handleLike:', track.title)
-  if (!player.toggleTrackLike) return
-  try { await player.toggleTrackLike(track) } catch (e) { console.error('[TrackList] like error:', e) }
+  try { await player.toggleTrackLike(track) } catch (e) { console.error(e) }
 }
 
 async function handleDownload(track: Track) {
   console.log('[TrackList] handleDownload:', track.title)
   if (downloading.value) return
   downloading.value = true
-  try { await downloads.downloadTrack(track) } catch (e) { console.error('[TrackList] dl error:', e) }
+  try { await downloads.downloadTrack(track) } catch (e) { console.error(e) }
   finally { downloading.value = false }
 }
 </script>
