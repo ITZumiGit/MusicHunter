@@ -74,8 +74,8 @@ function onTouchEnd(e: TouchEvent) {
     if (target.closest('.track-item, .track-btn, button, a, [role="button"]')) return
 
     // Guard: don't navigate if touching interactive elements
-    const target = e.target as HTMLElement
-    if (target.closest('.track-item, .track-btn, button, a, [role="button"]')) return
+    const _target = e.target as HTMLElement
+    if (_target.closest('.track-item, .track-btn, button, a, [role="button"]')) return
 
   const dx = e.changedTouches[0].clientX - touchStartX
   const dy = e.changedTouches[0].clientY - touchStartY
