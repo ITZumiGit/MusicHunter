@@ -63,6 +63,12 @@ async function play(track: Track) {
   console.log('[Player] play():', track?.title)
   initAudio()
   const a = audio.current!
+  
+  // Clean up previous state before starting new track
+  a.pause()
+  a.src = ''
+  a.load() // Force reset of audio element
+  
   currentTrack.value = track
   isPlaying.value = true
 
@@ -81,40 +87,67 @@ async function play(track: Track) {
     console.log('[Player] Stream:', url)
   }
 
-  if (url) {
-    // Clear previous source
-    a.src = ''
-    a.src = url
-    a.preload = 'auto'
-    console.log('[Player] src =', url)
-
-    // Error recovery
-    const onError = () => {
-      console.error('[Player] Load error, retrying...')
-      a.removeEventListener('error', onError)
-      setTimeout(() => {
-        a.src = url!
-        a.play().catch(e => console.error('[Player] Retry failed:', e))
-      }, 1500)
-    }
-    a.addEventListener('error', onError, { once: true })
-
-    try {
-      await a.play()
-      console.log('[Player] Playing!')
-      isPlaying.value = true
-    } catch (e: any) {
-      console.warn('[Player] Play failed, waiting canplay:', e.message)
-      a.addEventListener('canplay', () => {
-        a.play().then(() => {
-          console.log('[Player] Playing after canplay')
-          isPlaying.value = true
-        }).catch(() => { isPlaying.value = false })
-      }, { once: true })
-    }
-  } else {
+  if (!url) {
     console.error('[Player] No URL!')
     isPlaying.value = false
+    return
+  }
+
+  // Set new source
+  a.src = url
+  a.preload = 'auto'
+  console.log('[Player] src =', url)
+
+  // Remove any lingering error/canplay listeners
+  const cleanupListeners = () => {
+    a.removeEventListener('error', onError)
+    a.removeEventListener('canplay', onCanPlay)
+  }
+
+  const onCanPlay = () => {
+    cleanupListeners()
+    a.play().then(() => {
+      console.log('[Player] Playing after canplay')
+      isPlaying.value = true
+    }).catch(() => {
+      // Retry once after short delay
+      setTimeout(() => {
+        a.play().then(() => {
+          isPlaying.value = true
+        }).catch(() => {
+          console.error('[Player] Play failed after retry')
+          isPlaying.value = false
+        })
+      }, 500)
+    })
+  }
+
+  const onError = () => {
+    cleanupListeners()
+    console.warn('[Player] Load error, retrying once in 2s...')
+    setTimeout(() => {
+      a.src = url!
+      a.play().then(() => {
+        console.log('[Player] Retry succeeded')
+        isPlaying.value = true
+      }).catch((e) => {
+        console.error('[Player] Retry failed:', e)
+        isPlaying.value = false
+      })
+    }, 2000)
+  }
+
+  a.addEventListener('error', onError, { once: true })
+  a.addEventListener('canplay', onCanPlay, { once: true })
+
+  try {
+    await a.play()
+    console.log('[Player] Playing!')
+    isPlaying.value = true
+    cleanupListeners()
+  } catch (e: any) {
+    console.warn('[Player] Initial play() rejected, waiting for canplay:', e.message)
+    // canplay listener will handle it
   }
   scheduleHistory(track)
 }

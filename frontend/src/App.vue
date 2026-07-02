@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, provide } from 'vue'
+import { computed, onMounted, provide, watch } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import MobileNav from './components/MobileNav.vue'
 import Player from './components/Player.vue'
@@ -77,14 +77,25 @@ provide('player', player)
 
 const hasPlayer = computed(() => !!player.currentTrack.value)
 
-onMounted(async () => {
+// Загружаем лайки когда Telegram user становится доступен
+const loadLikesForUser = async () => {
   const tgUser = tg.user.value
   if (tgUser?.id) {
     player.tgUserId.value = tgUser.id
     await player.loadLikes(tgUser.id)
-  } else {
-    player.tgUserId.value = 12345
-    await player.loadLikes(12345)
+  }
+}
+
+onMounted(async () => {
+  // Попробуем сразу
+  await loadLikesForUser()
+})
+
+// Если tg user загрузился позже — перезагрузим лайки с правильным ID
+watch(() => tg.user.value, async (newUser) => {
+  if (newUser?.id && newUser.id !== player.tgUserId.value) {
+    console.log('[App] Telegram user changed, reloading likes for:', newUser.id)
+    await loadLikesForUser()
   }
 })
 </script>
