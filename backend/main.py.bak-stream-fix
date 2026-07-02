@@ -174,47 +174,59 @@ async def search_tracks(q: str = Query(..., min_length=1), limit: int = Query(30
 # ─── Stream (proxy audio through backend with WebM→MP3 conversion) ───
 @app.api_route("/stream/{track_id:path}", methods=["GET", "HEAD"])
 async def get_stream(track_id: str, request: Request):
-    """Проксируем аудио через бэкенд с конвертацией WebM -> MP3 + кеш"""
+    """Проксируем аудио через бэкенд с конвертацией WebM → MP3 + кеш"""
     import httpx
     import asyncio
+    import tempfile
     import os
     import hashlib
-    import tempfile
-    import shutil
     from starlette.responses import StreamingResponse
 
+    # Кеш для конвертированных MP3
     CACHE_DIR = "/app/backend/cache/mp3"
     os.makedirs(CACHE_DIR, exist_ok=True)
     cache_key = hashlib.md5(track_id.encode()).hexdigest()
     cached_mp3 = os.path.join(CACHE_DIR, f"{cache_key}.mp3")
 
-    # Если есть в кеше — отдаём мгновенно через FileResponse (streaming из файла)
-    if os.path.exists(cached_mp3) and os.path.getsize(cached_mp3) > 1000:
-        file_size = os.path.getsize(cached_mp3)
-        return FileResponse(
-            cached_mp3,
-            media_type="audio/mpeg",
-            headers={
-                "Content-Length": str(file_size),
+    cors_headers = {}
+
+    # Если есть в кеше — отдаём мгновенно
+    if os.path.exists(cached_mp3) and os.path.getsize(cached_mp3) > 0:
+        if request.method == "HEAD":
+            return Response(status_code=200, headers={
+                "Content-Type": "audio/mpeg",
+                "Content-Length": str(os.path.getsize(cached_mp3)),
                 "Accept-Ranges": "bytes",
-                "Cache-Control": "public, max-age=86400",
-            }
-        )
+            })
+        file_size = os.path.getsize(cached_mp3)
+        return FileResponse(cached_mp3, media_type="audio/mpeg", headers={
+            "Content-Length": str(file_size),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=86400",
+        })
 
     url = await music.get_stream_url(track_id)
     if not url:
         raise HTTPException(404, "Stream URL not found")
 
-    if request.method == "HEAD":
-        return Response(status_code=200, headers={
-            "Content-Type": "audio/mpeg",
-            "Accept-Ranges": "bytes",
-        })
-
-    # Скачиваем WebM во временный файл
-    tmp_webm = None
+    client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(120.0, connect=15.0, read=120.0))
     try:
-        client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(120.0, connect=15.0, read=120.0))
+        # HEAD — просто проверяем доступность
+        if request.method == "HEAD":
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "*/*",
+            }
+            req = client.build_request("HEAD", url, headers=headers)
+            resp = await client.send(req)
+            await resp.aclose()
+            await client.aclose()
+            return Response(status_code=200, headers={
+                "Content-Type": "audio/mpeg",
+                "Accept-Ranges": "bytes",
+            })
+
+        # GET — скачиваем WebM
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "*/*",
@@ -227,37 +239,53 @@ async def get_stream(track_id: str, request: Request):
             await client.aclose()
             raise HTTPException(502, f"Upstream returned {resp.status_code}")
 
-        tmp_webm = tempfile.NamedTemporaryFile(delete=False, suffix='.webm', dir='/tmp').name
-        with open(tmp_webm, 'wb') as wf:
+        # Скачиваем WebM во временный файл
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as tmp_webm:
+            webm_path = tmp_webm.name
             async for chunk in resp.aiter_bytes(chunk_size=65536):
-                wf.write(chunk)
+                tmp_webm.write(chunk)
         await resp.aclose()
         await client.aclose()
 
-        # Конвертируем WebM -> MP3
-        mp3_path = cached_mp3  # пишем сразу в кеш
+        # Конвертируем WebM → MP3 через ffmpeg
+        mp3_path = webm_path.replace('.webm', '.mp3')
         process = await asyncio.create_subprocess_exec(
-            'ffmpeg', '-i', tmp_webm, '-vn',
+            'ffmpeg', '-i', webm_path, '-vn',
             '-acodec', 'libmp3lame', '-ab', '192k', '-ar', '44100',
-            '-y', mp3_path,
+            '-y',
+            mp3_path,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await process.communicate()
 
-        if process.returncode != 0 or not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 1000:
-            if os.path.exists(mp3_path):
-                os.unlink(mp3_path)
-            raise HTTPException(500, f"FFmpeg conversion failed: {stderr.decode()[:200]}")
+        if process.returncode != 0:
+            if os.path.exists(webm_path):
+                os.unlink(webm_path)
+            raise HTTPException(500, f"FFmpeg conversion failed: {stderr.decode()}")
 
-        file_size = os.path.getsize(mp3_path)
-        return FileResponse(
-            mp3_path,
+        # Сохраняем в кеш
+        import shutil
+        shutil.copy2(mp3_path, cached_mp3)
+
+        # Читаем и отдаём
+        with open(mp3_path, 'rb') as f:
+            mp3_data = f.read()
+
+        # Удаляем временные файлы
+        if os.path.exists(webm_path):
+            os.unlink(webm_path)
+        if os.path.exists(mp3_path):
+            os.unlink(mp3_path)
+
+        return Response(
+            content=mp3_data,
             media_type="audio/mpeg",
             headers={
-                "Content-Length": str(file_size),
+                "Content-Length": str(len(mp3_data)),
                 "Accept-Ranges": "bytes",
                 "Cache-Control": "public, max-age=86400",
+                **cors_headers,
             }
         )
     except HTTPException:
@@ -265,13 +293,14 @@ async def get_stream(track_id: str, request: Request):
     except Exception as e:
         import traceback
         print(f"STREAM ERROR: {traceback.format_exc()}")
-        raise HTTPException(502, f"Stream proxy error: {str(e)[:100]}")
-    finally:
-        if tmp_webm and os.path.exists(tmp_webm):
-            try:
-                os.unlink(tmp_webm)
-            except:
-                pass
+        import traceback
+        print(f"STREAM ERROR: {traceback.format_exc()}")
+        try:
+            await client.aclose()
+        except:
+            pass
+        raise HTTPException(502, f"Stream proxy error: {str(e)}")
+
 
 @app.get("/stream-url/{track_id:path}")
 async def get_stream_url_endpoint(track_id: str):
