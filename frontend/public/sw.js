@@ -4,7 +4,7 @@
  * Аудио стримы не кешируются здесь — они кешируются через IndexedDB (useDownloads).
  */
 
-const CACHE_NAME = 'musichunter-v2-20260628'
+const CACHE_NAME = 'musichunter-v3-20260702'
 const STATIC_ASSETS = [
   '/',
   '/index.html',

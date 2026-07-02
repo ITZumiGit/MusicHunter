@@ -43,6 +43,9 @@ export function useVisualizer() {
       source.connect(analyser)
       analyser.connect(audioContext.destination)
 
+      // CRITICAL: resume() иначе Chrome держит AudioContext suspended = нет звука!
+      audioContext.resume().catch(() => {})
+
       isActive.value = true
       startDrawing()
     } catch (e) {
