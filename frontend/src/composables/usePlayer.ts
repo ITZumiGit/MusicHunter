@@ -32,6 +32,7 @@ const isCurrentLiked = computed(() => {
 function initAudio() {
   if (audio.current) return
   const a = new Audio()
+  a.crossOrigin = 'anonymous'  // REQUIRED for Web Audio API (createMediaElementSource / visualizer)
   a.preload = 'auto'
   a.volume = volume.value
   
